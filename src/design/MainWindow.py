@@ -9,8 +9,6 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtCore import QDir
-from PyQt5.QtWidgets import QFileDialog
 
 
 class Ui_MainWindow(object):
@@ -20,7 +18,7 @@ class Ui_MainWindow(object):
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.pushButton_2 = QtWidgets.QPushButton(self.centralwidget)
-        self.pushButton_2.setGeometry(QtCore.QRect(30, 72, 91, 21))
+        self.pushButton_2.setGeometry(QtCore.QRect(30, 72, 141, 21))
         self.pushButton_2.setObjectName("pushButton_2")
         self.label = QtWidgets.QLabel(self.centralwidget)
         self.label.setGeometry(QtCore.QRect(30, 30, 111, 16))
@@ -45,23 +43,5 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
-        self.pushButton_2.setText(_translate("MainWindow", "选择客诉文件"))
-        self.pushButton_2.clicked.connect(self.getFiles)
+        self.pushButton_2.setText(_translate("MainWindow", "选择客诉Excel文件"))
         self.label.setText(_translate("MainWindow", "自动录入客诉"))
-
-    def getFiles(self):
-        dlg = QFileDialog()
-        dlg.setFileMode(QFileDialog.AnyFile)
-        # QFileDialog.ExistingFiles可选择打开多个文件，返回文件路径列表
-        # dlg.setFileMode(QFileDialog.ExistingFiles)
-        dlg.setFilter(QDir.Files)
-
-        if dlg.exec_():
-            # 返回的是打开文件的路径列表
-            filenames = dlg.selectedFiles()
-            print(filenames)
-            with open(filenames[0], 'r') as f:
-                data = f.read()
-
-
-
