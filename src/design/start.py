@@ -4,8 +4,8 @@ import os
 from time import sleep
 
 from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import QApplication, QMainWindow
-from src.design.test_tool import Ui_MainWindow
+from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
+from test_tool import Ui_MainWindow
 import sys
 
 
@@ -41,7 +41,8 @@ class MyWindow(QMainWindow, Ui_MainWindow):
             print(e)
 
     def callback(self, i):  # 这里的 i 就是任务线程传回的数据
-        print('calling done')
+        os.system('adb disconnect')
+        QMessageBox.about(self, "循环呼叫提示", i)
 
 
 class MyThread(QThread):
@@ -61,8 +62,7 @@ class MyThread(QThread):
             cmd = 'adb -s ' + self.outdoor_address + ' shell input keyevent POUND'
             os.system(cmd)
             sleep(20)
-
-        self.signal.emit("ok")  # 发出任务完成信号
+        self.signal.emit("呼叫完成")  # 发出任务完成信号
 
 
 if __name__ == '__main__':
