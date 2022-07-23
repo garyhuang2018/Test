@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>579</width>
-    <height>225</height>
+    <width>904</width>
+    <height>404</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -155,6 +155,42 @@
         <string>呼叫次数：</string>
        </property>
       </widget>
+      <widget class="QGroupBox" name="groupBox_2">
+       <property name="geometry">
+        <rect>
+         <x>9</x>
+         <y>149</y>
+         <width>551</width>
+         <height>181</height>
+        </rect>
+       </property>
+       <property name="title">
+        <string>测试日志</string>
+       </property>
+       <widget class="QTextBrowser" name="textBrowser">
+        <property name="geometry">
+         <rect>
+          <x>10</x>
+          <y>20</y>
+          <width>531</width>
+          <height>151</height>
+         </rect>
+        </property>
+       </widget>
+      </widget>
+      <widget class="QGroupBox" name="groupBox_3">
+       <property name="geometry">
+        <rect>
+         <x>589</x>
+         <y>19</y>
+         <width>261</width>
+         <height>311</height>
+        </rect>
+       </property>
+       <property name="title">
+        <string>门口机截图</string>
+       </property>
+      </widget>
      </widget>
     </item>
    </layout>
@@ -164,7 +200,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>579</width>
+     <width>904</width>
      <height>23</height>
     </rect>
    </property>
