@@ -36,6 +36,10 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         """
         logging.warning('start calling thread')
         self.textBrowser.append('start calling')
+        print(self.checkBox.isChecked())
+        self.my_thread.checkBox = False
+        if self.checkBox.isChecked():
+            self.my_thread.checkBox = True
         try:
             outdoor_address = self.ip_address_input.text() + ":" + self.port_input.text()
             self.my_thread.outdoor_address = outdoor_address
@@ -72,7 +76,9 @@ class MyThread(QThread):
             os.system(cmd)
             cmd = 'adb -s ' + self.outdoor_address + ' shell input keyevent POUND'
             os.system(cmd)
-            self.answer_room_no_match()
+            if self.checkBox:
+                print(self.checkBox)
+                self.answer_room_no_match()
             sleep(25)
         self.signal.emit("呼叫完成")  # 发出任务完成信号
 
@@ -84,12 +90,16 @@ class MyThread(QThread):
         dev_list = requests.get(url).json().get("data")
         floor_no = self.room_no[0:2]  # 切割前面2个数字作为楼层，后面2个数字作为房号
         room_no = self.room_no[2:]
-        indoor_ip = ""
+        model_no, indoor_ip = "", ""
         for i in range(0, len(dev_list)):
             if dev_list[i].get('floorNo') == floor_no and dev_list[i].get('roomNo') == room_no:
                 indoor_ip = str(dev_list[i].get('ipAddr'))
+                model_no = dev_list[i].get('devModel')
                 print(dev_list[i].get('ipAddr'))
-        adb_device = u2.connect(indoor_ip + ":5555")
+        if 'AGV' in str(model_no):
+            adb_device = u2.connect(indoor_ip + ":555")
+        else:
+            adb_device = u2.connect(indoor_ip + ":5555")
         print(adb_device.info)
         adb_device(text='接听').click()
 

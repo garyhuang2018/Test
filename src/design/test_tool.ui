@@ -110,19 +110,6 @@
         <string> 呼叫房号：</string>
        </property>
       </widget>
-      <widget class="QPushButton" name="call_button">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>100</y>
-         <width>75</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>循环呼叫</string>
-       </property>
-      </widget>
       <widget class="QLineEdit" name="times_input">
        <property name="geometry">
         <rect>
@@ -190,6 +177,38 @@
        <property name="title">
         <string>门口机截图</string>
        </property>
+      </widget>
+      <widget class="QWidget" name="layoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>100</y>
+         <width>223</width>
+         <height>25</height>
+        </rect>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
+        <item>
+         <widget class="QPushButton" name="call_button">
+          <property name="text">
+           <string>循环呼叫</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="checkBox">
+          <property name="font">
+           <font>
+            <family>宋体</family>
+            <pointsize>10</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>安卓室内机自动接听</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </widget>
      </widget>
     </item>
