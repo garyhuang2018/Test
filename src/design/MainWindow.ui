@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1044</width>
-    <height>708</height>
+    <width>1096</width>
+    <height>710</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -44,7 +44,7 @@
      <rect>
       <x>260</x>
       <y>20</y>
-      <width>771</width>
+      <width>820</width>
       <height>641</height>
      </rect>
     </property>
@@ -77,7 +77,7 @@
         </rect>
        </property>
        <property name="text">
-        <string>自动录入音频参数</string>
+        <string>查看音频参数</string>
        </property>
       </widget>
       <widget class="Line" name="line_2">
@@ -93,38 +93,56 @@
         <enum>Qt::Horizontal</enum>
        </property>
       </widget>
-      <widget class="QPushButton" name="pushButton_3">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>30</y>
-         <width>141</width>
-         <height>21</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>选择音频Json文件</string>
-       </property>
-      </widget>
       <widget class="QTableView" name="tableView">
        <property name="geometry">
         <rect>
          <x>0</x>
          <y>70</y>
-         <width>771</width>
+         <width>821</width>
          <height>551</height>
         </rect>
        </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
       </widget>
-      <widget class="QComboBox" name="comboBox">
+      <widget class="QPushButton" name="pushButton">
        <property name="geometry">
         <rect>
-         <x>670</x>
+         <x>740</x>
          <y>40</y>
-         <width>101</width>
+         <width>81</width>
          <height>31</height>
         </rect>
        </property>
+       <property name="text">
+        <string>保存参数</string>
+       </property>
+      </widget>
+      <widget class="QWidget" name="layoutWidget">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>30</y>
+         <width>211</width>
+         <height>31</height>
+        </rect>
+       </property>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <property name="spacing">
+         <number>1</number>
+        </property>
+        <item>
+         <widget class="QPushButton" name="pushButton_3">
+          <property name="text">
+           <string>选择音频Json文件</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="comboBox"/>
+        </item>
+       </layout>
       </widget>
      </widget>
     </widget>
@@ -162,7 +180,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1044</width>
+     <width>1096</width>
      <height>23</height>
     </rect>
    </property>

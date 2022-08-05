@@ -3,9 +3,9 @@
 import json
 import sys
 
-from PyQt5.QtCore import QDir
+from PyQt5.QtCore import QDir, QPoint
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableView
+from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableView, QMenu
 from MainWindow import Ui_MainWindow
 
 
@@ -17,6 +17,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 #        self.pushButton_2.clicked.connect(self.get_file)
         self.pushButton_3.clicked.connect(self.get_audio_json)
         self.treeWidget.clicked.connect(self.tree_clicked)
+        self.menu = QMenu
 
     def tree_clicked(self):
         item = self.treeWidget.currentItem()
@@ -41,8 +42,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         table_column_num = len(selected_target_list)  # define the table height
         if table_column_num > 0:
             self.model = QStandardItemModel(table_column_num, 5)
-            print(selected_target_list)
-            self.model.setHorizontalHeaderLabels(['model', 'playBackGain', 'micGain', 'ngThres', 'ngFloorGain', 'newCloudMicGain', 'newCloudPlayGain'])
+            self.model.setHorizontalHeaderLabels(['model', 'playBackGain', 'micGain', 'ngThres', 'ngFloorGain', 'newCloudMicGain', 'newCloudPlayGain', 'status'])
             for model in selected_target_list:
                 self.model.setItem(selected_target_list.index(model), 0, QStandardItem(str(model.get('model'))))
                 self.model.setItem(selected_target_list.index(model), 1, QStandardItem(str(model.get('params').get('playBackGain'))))
@@ -53,6 +53,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 self.model.setItem(selected_target_list.index(model), 5, QStandardItem(str(dic.get('newCloudMicGain'))))
                 self.model.setItem(selected_target_list.index(model), 6, QStandardItem(str(dic.get('newCloudPlayGain'))))
             self.tableView.setModel(self.model)
+            self.model.itemChanged.connect(self.table_change)
 
     def get_file(self) -> dict:
         print('load file ')
@@ -61,7 +62,6 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         # QFileDialog.ExistingFiles可选择打开多个文件，返回文件路径列表
         # dlg.setFileMode(QFileDialog.ExistingFiles)
         dlg.setFilter(QDir.Files)
-
         if dlg.exec_():
             # 返回的是打开文件的路径列表
             filenames = dlg.selectedFiles()
@@ -69,6 +69,17 @@ class MyWindow(QMainWindow, Ui_MainWindow):
                 data = f.read()
                 dic = json.loads(data)
                 return dic
+
+    def table_change(self):
+        print(self._chose_data[self.comboBox.currentIndex()].get('model'))
+        print(self.tableView.currentIndex().row(), self.tableView.currentIndex().column())
+        item = self.model.index(self.tableView.currentIndex().row(), 0)
+        print(item.data())
+        print(self.tableView.currentIndex().data())
+        '''
+        作⽤：双击事件监听，显⽰被选中的单元格
+        '''
+        # 打印被选中的单元格
 
     def set_table_item(self):
         # 添加数据

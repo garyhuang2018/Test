@@ -1,6 +1,7 @@
 # encoding= utf-8
 # __author__= gary
 import os
+import subprocess
 from time import sleep
 
 import requests
@@ -26,8 +27,22 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.room_no_input.setText('0501')
         self.my_thread = MyThread()
         self.call_button.clicked.connect(lambda: self.start_call_thread())
+        self.call_button_2.clicked.connect(lambda: self.start_call_manager())
         self.my_thread.signal.connect(self.callback)  # 设置任务线程发射信号触发的函数
+        self.local_voice_button.clicked.connect(self.voice_record)
         self.textBrowser.setReadOnly(True)
+
+    def adb_connect(self, ip, port):
+        os.system('adb connect ' + ip + port)
+
+    def voice_record(self):
+        self.adb_connect(self.ip_address_input.text(), ':5555')
+        logging.warning('start calling thread')
+        os.system('adb shell am start com.android.soundrecorder')
+        child1 = subprocess.Popen(["adb", "logcat"], stdout=subprocess.PIPE)
+        child2 = subprocess.Popen(["grep", "received MCU"], stdin=child1.stdout, stdout=subprocess.PIPE)
+        out = child2.communicate()
+        print(out)
 
     def start_call_thread(self):
         """
@@ -54,10 +69,36 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             print(e)
 
+    def start_call_manager(self):
+        """
+        启动多线程, call manager
+        :return:
+        """
+        print(self.ip_address_input.text())
+        adb_outdoor = u2.connect(self.ip_address_input.text() + ":5555")
+        print(adb_outdoor.info)
+        adb_outdoor(text='管理处').click()
+        print('call manager')
+        url = DEV_LIST.replace('ip', '192.192.10.52')  # 将接口中的ip替换获取接口数据
+        dev_list = requests.get(url).json().get("data")
+        manager_ip = ''
+        for i in range(0, len(dev_list)):
+            if dev_list[i].get('devType') == 1 and dev_list[i].get('status') == 1:
+                manager_ip = str(dev_list[i].get('ipAddr'))
+                print(manager_ip)
+        if manager_ip != '':
+            adb_device = u2.connect(manager_ip + ":5555")
+            adb_device(text='接听').click()
+            sleep(10)
+        print('call done')
+
     def callback(self, i):  # 这里的 i 就是任务线程传回的数据
         self.textBrowser.append('finish calling')
         os.system('adb disconnect')
         QMessageBox.about(self, "循环呼叫提示", i)
+
+    def closeEvent(self, event):
+        os.system('adb disconnect')  # 重写关闭事件
 
 
 class MyThread(QThread):

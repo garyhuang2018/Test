@@ -183,18 +183,11 @@
         <rect>
          <x>10</x>
          <y>100</y>
-         <width>223</width>
+         <width>364</width>
          <height>25</height>
         </rect>
        </property>
        <layout class="QHBoxLayout" name="horizontalLayout_2">
-        <item>
-         <widget class="QPushButton" name="call_button">
-          <property name="text">
-           <string>循环呼叫</string>
-          </property>
-         </widget>
-        </item>
         <item>
          <widget class="QCheckBox" name="checkBox">
           <property name="font">
@@ -204,7 +197,28 @@
            </font>
           </property>
           <property name="text">
-           <string>安卓室内机自动接听</string>
+           <string>安卓机自动接听</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="local_voice_button">
+          <property name="text">
+           <string>本地录音</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="call_button">
+          <property name="text">
+           <string>呼叫室内机</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="call_button_2">
+          <property name="text">
+           <string>呼叫管理机</string>
           </property>
          </widget>
         </item>
