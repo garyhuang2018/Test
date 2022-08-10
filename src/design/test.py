@@ -43,9 +43,10 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
     def get_remote_audio(self, dir_path, version_date):
         """
-        get audio file from server 0.118
+        get audio file from server 0.118 and set data into table
 
         """
+        logger.info('get remote audio file data')
         return_dir_path = 'no new version'
         server_ip = "192.192.0.118"  # 共享目录主机IP地址
         username = "gary.huang@gemvary.com"  # 本机用户名
@@ -108,6 +109,12 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         logger.info('menu')
 
     def get_audio_json(self):
+        if self.audio_dic is not None:
+            logger.info('clear table data')
+            self.audio_dic.clear()
+            self.model.clear()
+            self.comboBox.clear()
+            self._chose_data.clear()
         self.audio_dic = self.get_file()  # audio param file before editing
         for model in self.audio_dic:
             self._chose_data.append(model)
@@ -149,7 +156,6 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         model.insertRow(0)
 
     def get_file(self) -> dict:
-        print('load file ')
         dlg = QFileDialog()
         dlg.setFileMode(QFileDialog.AnyFile)
         # QFileDialog.ExistingFiles可选择打开多个文件，返回文件路径列表
