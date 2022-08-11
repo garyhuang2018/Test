@@ -131,12 +131,12 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="">
+      <widget class="QWidget" name="layoutWidget">
        <property name="geometry">
         <rect>
-         <x>660</x>
+         <x>580</x>
          <y>40</y>
-         <width>151</width>
+         <width>239</width>
          <height>31</height>
         </rect>
        </property>
@@ -152,6 +152,13 @@
          <widget class="QPushButton" name="pushButton">
           <property name="text">
            <string>保存参数</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="excelButton">
+          <property name="text">
+           <string>导出Excel</string>
           </property>
          </widget>
         </item>

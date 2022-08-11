@@ -6,6 +6,7 @@ import sys
 import tempfile
 import time
 
+import xlwt
 from PyQt5.QtCore import QDir, QPoint, Qt, QModelIndex
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableView, QMenu
@@ -32,6 +33,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.add_voice.clicked.connect(lambda: self.add_audio_para(self.model))
         self.tableView.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tableView.customContextMenuRequested.connect(self.contextMenu)
+        self.excelButton.clicked.connect(self.save_excel)
 
         dir_path = "/楼宇产品部/对讲音频参数"
         print(dir_path)
@@ -191,6 +193,13 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         '''
         作⽤：双击事件监听，显⽰被选中的单元格
         '''
+
+    def save_excel(self):
+        logger.info('start saving excel')
+        workbook = xlwt.Workbook(encoding=' ascii')
+        worksheet = workbook.add_sheet(str(self.comboBox.currentText()))
+        worksheet.write(0, 0, self.header[0])
+        workbook.save("修改好的音频参数.xls")
 
 
 if __name__ == '__main__':
