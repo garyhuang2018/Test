@@ -1,5 +1,6 @@
 # encoding= utf-8
 # __author__= gary
+import json
 import os
 import subprocess
 import sys
@@ -7,10 +8,9 @@ from time import sleep
 
 import cv2
 from PyQt5 import QtGui
-from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import QMainWindow, QApplication
+from PyQt5.QtCore import QThread, pyqtSignal, QDir
+from PyQt5.QtWidgets import QMainWindow, QApplication, QSlider, QMessageBox, QFileDialog
 
-from call_tool import RebootThread
 from ui.mainScreen import Ui_MainWindow
 
 
@@ -31,14 +31,14 @@ def reboot_target_device(adb_address):
 
     """
     cmd = 'adb -s ' + adb_address + ' reboot'
-    os.system(cmd)
+    os.popen(cmd)
 
 
 def take_photo(adb_address):
-    os.system('adb -s ' + adb_address + ' shell am start -a android.media.action.STILL_IMAGE_CAMERA')
+    os.popen('adb -s ' + adb_address + ' shell am start -a android.media.action.STILL_IMAGE_CAMERA')
     sleep(3)
-    os.system('adb -s ' + adb_address + ' shell input keyevent 27')
-    sleep(3)
+    os.popen('adb -s ' + adb_address + ' shell input keyevent 27')
+    sleep(6)
 
 
 def get_screen_shot(adb_address):
@@ -49,10 +49,11 @@ def get_screen_shot(adb_address):
     # print(type(stdoutput))
     #  print(bytes.decode(stdoutput))
     #  print(stdoutput.decode(), '    :    ', erroutput)
+    #print('get screen shot', p.stdout.read())
     sub_stdout = p.stdout.read().decode()
-    print(p.stdout.read())
     correct_img = ' '
     for i in sub_stdout.split('\r\r'):
+        print(i)
         if (i.strip()) > correct_img:
             correct_img = i.strip()  # select the newest img
     print('correct img:', correct_img)
@@ -63,13 +64,16 @@ def get_screen_shot(adb_address):
     sleep(1)
     # 将这个文件pull到本地电脑上
     adbcode = "adb -s " + adb_address + " pull /storage/emulated/0/DCIM/Camera/" + str(correct_img)
-    os.system(adbcode)
+    os.popen(adbcode)
     sleep(1)
     return correct_img
     # 将这个文件pull到本地电脑上
 
 
 def compare_two_pics(sample_image, test_image):
+    """
+    :return Boolean  True if the black screen occurs
+    """
     img = cv2.imread(sample_image)
     img_target = cv2.imread(test_image)
     # print(img)
@@ -87,25 +91,85 @@ def compare_two_pics(sample_image, test_image):
     result = cv2.compareHist(hist_origin, hist_target, cv2.HISTCMP_CORREL)
     print('测试:', result)
     if result <= 0.75:  # 判断相似度<=0.75 时为出现黑屏现象
-        print('出现黑屏')
         return True
 
 
+class RebootThread(QThread):
+    """
+    Start reboot thread
+    """
+    signal = pyqtSignal(bool)  # 创建任务信号
+
+    def run(self):
+        pass
+
 class RebootWindow(QMainWindow, Ui_MainWindow):
+
     def __init__(self, parent=None):
         super(RebootWindow, self).__init__(parent)
         self.reboot_thread = RebootThread()
         self.setupUi(self)
         self.runBacktestPB.clicked.connect(self.run_test)
-        self.monitor_input.setText(self.detect_adb_devices())
+       # self.monitor_input.setText(self.detect_adb_devices())
+        self.actionOpen.triggered.connect(self.open_setting)
+        # 设置最小值
+        self.rebootSlider.setMinimum(1)
+        # 设置最大值
+        self.rebootSlider.setMaximum(100)
+        self.rebootSlider.setTickPosition(QSlider.TicksLeft)
+        self.rebootSlider.valueChanged[int].connect(self.changevalue)
+        self.force_reboot_btn.clicked.connect(self.force_reboot)
+        self.force_int_btn.clicked.connect(self.inte)
+        self.force_reboot_flag = True
+        self.sin1 = pyqtSignal(bool)
+
+
+    def inte(self):
+        self.force_reboot_flag = False
+
+    def force_reboot(self):
+        for i in range(0, self.rebootSlider.value()):
+            if self.force_reboot_flag:
+                sleep(1)
+                print('test_int', i)
+           # reboot_target_device(self.test_id.text())
+
+    def open_setting(self):
+        """
+        Open the setting file and set the para into the text input field
+        """
+        dlg = QFileDialog()
+        dlg.setFileMode(QFileDialog.AnyFile)
+        # QFileDialog.ExistingFiles可选择打开多个文件，返回文件路径列表
+        # dlg.setFileMode(QFileDialog.ExistingFiles)
+        dlg.setFilter(QDir.Files)
+        if dlg.exec_():
+            # 返回的是打开文件的路径列表
+            filenames = dlg.selectedFiles()
+            with open(filenames[0], 'r') as f:
+                data = f.read()
+                dic = json.loads(data)
+                self.monitor_input.setText(dic.get('monitor'))
+                self.test_id.setText(dic.get('test_device'))
+
+    def changevalue(self, value):
+        self.reboot_times.setText('重启次数：' + str(value))
 
     def run_test(self):
-        self.reboot_thread.monitor = self.detect_adb_devices()
+        self.img_1.clear()
+        self.img_2.clear()
+        self.result.clear()
+        self.reboot_thread.monitor = self.monitor_input.text()
         self.reboot_thread.test_device = self.test_id.text()
+        self.reboot_thread.times = self.rebootSlider.value()
         self.reboot_thread.signal.connect(self.handle_test)  # get img from the subprocess
+        self.reboot_thread.black_screen_signal.connect(self.handle_black_screen)
         self.reboot_thread.start()
 
     def handle_test(self, dic):
+        """
+        set the img
+        """
         print('handle callback')
         if dic.get('label_name') == 'img_1':
             image = QtGui.QPixmap(dic.get('img')).scaled(520, 500)
@@ -113,6 +177,14 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         else:
             image = QtGui.QPixmap(dic.get('img')).scaled(520, 500)
             self.img_2.setPixmap(image)
+            times = dic.get('times')
+            self.compare_result.setText('第' + str(times) +'次重启')
+
+    def handle_black_screen(self, flag):
+        if flag:
+            self.result.setText("出现黑屏，请检查")
+        else:
+            self.result.setText("测试正常，未出现黑屏")
 
     def detect_adb_devices(self):
         output = subprocess.check_output("adb devices").decode().splitlines()
@@ -126,34 +198,37 @@ class RebootThread(QThread):
     Start reboot thread
     """
     signal = pyqtSignal(dict)  # 创建任务信号
+    black_screen_signal = pyqtSignal(bool)
 
     def run(self):
         print('enter subprocess')
+        adb_connect_device(self.monitor)
         take_photo(self.monitor)
         sample_img = get_screen_shot(self.monitor)  # the first photo as the sample img
         cover_img = os.path.abspath(sample_img)
         dic = {'label_name': 'img_1', 'img': cover_img}
         self.signal.emit(dic)  # 返回字典判断是画哪个图像
-        for i in range(0, 20):
+        for i in range(0, self.times):
             adb_connect_device(self.test_device)
             reboot_target_device(self.test_device)
             sleep(35)  # wait till the device back to previous
             take_photo(self.monitor)
             test_img = get_screen_shot(self.monitor)
             new_img = os.path.abspath(test_img)
-            dic = {'label_name': 'img_2', 'img': new_img}
+            dic = {'label_name': 'img_2', 'img': new_img, 'times': i+1}
             self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+            print(i, '次重启')
             sleep(1)
             flag = compare_two_pics(sample_img, test_img)  # if the black screen occurs, break the loop
             if flag:
+                self.black_screen_signal.emit(flag)
                 break
-        print('hello')
-        pass
 
 
 if __name__ == '__main__':
     # application 对象
     app = QApplication(sys.argv)
     w = RebootWindow()
+    w.setWindowTitle('重启黑屏测试工具')
     w.show()
     sys.exit(app.exec_())
