@@ -23,6 +23,15 @@ def adb_connect_device(adb_address):
     os.system(cmd)
 
 
+def check_device_platform(adb_address):
+    """
+       get the platform of device
+
+    """
+    output = subprocess.check_output('adb -s ' + adb_address + ' shell getprop | grep platform ').decode().splitlines()
+    return output[0]
+
+
 def reboot_target_device(adb_address):
     """
     reboot_target_device(adb_address)
@@ -42,20 +51,20 @@ def take_photo(adb_address):
 
 
 def get_screen_shot(adb_address):
-    p = subprocess.Popen("adb -s " + adb_address + " shell ls /storage/emulated/0/DCIM/Camera/ ",
-                         stdout=subprocess.PIPE, shell=True)
-    # 因为脚本输出文件名后面带了个换行符号 所以用 tr -d '\n' 来删掉换行符，有一些换行符是\r
-    # (stdoutput, erroutput) = p.communicate()
-    # print(type(stdoutput))
-    #  print(bytes.decode(stdoutput))
-    #  print(stdoutput.decode(), '    :    ', erroutput)
-    #print('get screen shot', p.stdout.read())
-    sub_stdout = p.stdout.read().decode()
+    platform = check_device_platform(adb_address)
     correct_img = ' '
-    for i in sub_stdout.split('\r\r'):
-        print(i)
-        if (i.strip()) > correct_img:
-            correct_img = i.strip()  # select the newest img
+    if platform.find('3288') != -1:
+        np = subprocess.Popen("adb -s " + adb_address + " shell ls -t /storage/emulated/0/DCIM/Camera/ ",
+                         stdout=subprocess.PIPE, shell=True)
+        correct_img = np.stdout.readline().decode().strip()
+    else:
+        p = subprocess.Popen("adb -s " + adb_address + " shell ls /storage/emulated/0/DCIM/Camera/ ",
+                         stdout=subprocess.PIPE, shell=True)
+        sub_stdout = p.stdout.read().decode()
+        for i in sub_stdout.split('\r\r'):
+            print(i)
+            if (i.strip()) > correct_img:
+                correct_img = i.strip()  # select the newest img
     print('correct img:', correct_img)
     if correct_img is None:
         return
@@ -69,6 +78,10 @@ def get_screen_shot(adb_address):
     return correct_img
     # 将这个文件pull到本地电脑上
 
+
+def clear_photos(adb_address):
+    subprocess.Popen("adb -s " + adb_address + " shell rm -r /storage/emulated/0/DCIM/Camera/ ",
+                     stdout=subprocess.PIPE, shell=True)
 
 def compare_two_pics(sample_image, test_image):
     """
@@ -116,8 +129,11 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.rebootSlider.setMinimum(1)
         # 设置最大值
         self.rebootSlider.setMaximum(100)
-        self.rebootSlider.setTickPosition(QSlider.TicksLeft)
+        self.timeSlider.setMinimum(15)
+        self.timeSlider.setMaximum(100)
+        self.rebootSlider.setTickPosition(QSlider.TicksRight)
         self.rebootSlider.valueChanged[int].connect(self.changevalue)
+        self.timeSlider.valueChanged[int].connect(self.changetime)
         self.force_reboot_btn.clicked.connect(self.force_reboot)
         self.force_int_btn.clicked.connect(self.inte)
         self.force_reboot_flag = True
@@ -151,9 +167,13 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
                 dic = json.loads(data)
                 self.monitor_input.setText(dic.get('monitor'))
                 self.test_id.setText(dic.get('test_device'))
+                self.timeSlider.setValue(dic.get('prefer_time'))
 
     def changevalue(self, value):
         self.reboot_times.setText('重启次数：' + str(value))
+
+    def changetime(self, value):
+        self.reboot_time.setText('重启时间：' + str(value) + "s")
 
     def run_test(self):
         self.img_1.clear()
@@ -162,6 +182,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.reboot_thread.monitor = self.monitor_input.text()
         self.reboot_thread.test_device = self.test_id.text()
         self.reboot_thread.times = self.rebootSlider.value()
+        self.reboot_thread.reboot_interval = self.timeSlider.value()
         self.reboot_thread.signal.connect(self.handle_test)  # get img from the subprocess
         self.reboot_thread.black_screen_signal.connect(self.handle_black_screen)
         self.reboot_thread.start()
@@ -172,6 +193,8 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         """
         print('handle callback')
         if dic.get('label_name') == 'img_1':
+            print(dic.get('img'))
+           # image = QtGui.QPixmap(img_path).scaled(520, 500)
             image = QtGui.QPixmap(dic.get('img')).scaled(520, 500)
             self.img_1.setPixmap(image)
         else:
@@ -211,7 +234,7 @@ class RebootThread(QThread):
         for i in range(0, self.times):
             adb_connect_device(self.test_device)
             reboot_target_device(self.test_device)
-            sleep(35)  # wait till the device back to previous
+            sleep(int(self.reboot_interval))  # wait till the device back to previous
             take_photo(self.monitor)
             test_img = get_screen_shot(self.monitor)
             new_img = os.path.abspath(test_img)
@@ -223,6 +246,7 @@ class RebootThread(QThread):
             if flag:
                 self.black_screen_signal.emit(flag)
                 break
+        clear_photos(self.monitor)
 
 
 if __name__ == '__main__':
