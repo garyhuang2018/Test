@@ -4,6 +4,8 @@ import json
 import os
 import subprocess
 import sys
+import telnetlib
+import time
 from time import sleep
 
 import cv2
@@ -76,25 +78,23 @@ def get_screen_shot(adb_address):
     os.popen(adbcode)
     sleep(1)
     return correct_img
-    # 将这个文件pull到本地电脑上
 
 
 def clear_photos(adb_address):
     subprocess.Popen("adb -s " + adb_address + " shell rm -r /storage/emulated/0/DCIM/Camera/ ",
                      stdout=subprocess.PIPE, shell=True)
 
+
 def compare_two_pics(sample_image, test_image):
     """
-    :return Boolean  True if the black screen occurs
+    :return Boolean  return True if the black screen occurs
     """
     img = cv2.imread(sample_image)
     img_target = cv2.imread(test_image)
-    # print(img)
     print(type(img))
     source_img = cv2.split(img)
 
     target_img = cv2.split(img_target)
-    # print(source_img)
     histSize = [256]
     histRange = [0, 256]
     hist_origin = cv2.calcHist(source_img, [0], None, histSize, histRange,
@@ -116,6 +116,7 @@ class RebootThread(QThread):
     def run(self):
         pass
 
+
 class RebootWindow(QMainWindow, Ui_MainWindow):
 
     def __init__(self, parent=None):
@@ -128,9 +129,9 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         # 设置最小值
         self.rebootSlider.setMinimum(1)
         # 设置最大值
-        self.rebootSlider.setMaximum(100)
-        self.timeSlider.setMinimum(15)
-        self.timeSlider.setMaximum(100)
+        self.rebootSlider.setMaximum(500)
+        self.timeSlider.setMinimum(12)
+        self.timeSlider.setMaximum(150)
         self.rebootSlider.setTickPosition(QSlider.TicksRight)
         self.rebootSlider.valueChanged[int].connect(self.changevalue)
         self.timeSlider.valueChanged[int].connect(self.changetime)
@@ -138,7 +139,6 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.force_int_btn.clicked.connect(self.inte)
         self.force_reboot_flag = True
         self.sin1 = pyqtSignal(bool)
-
 
     def inte(self):
         self.force_reboot_flag = False
@@ -225,28 +225,108 @@ class RebootThread(QThread):
 
     def run(self):
         print('enter subprocess')
+        #  if the 555 or 5555 not in the setting, go to the telnet reboot process
+        digital_device_flag = False
+        # take the first photo as the sample img
         adb_connect_device(self.monitor)
         take_photo(self.monitor)
-        sample_img = get_screen_shot(self.monitor)  # the first photo as the sample img
+        sample_img = get_screen_shot(self.monitor)
         cover_img = os.path.abspath(sample_img)
         dic = {'label_name': 'img_1', 'img': cover_img}
         self.signal.emit(dic)  # 返回字典判断是画哪个图像
-        for i in range(0, self.times):
-            adb_connect_device(self.test_device)
-            reboot_target_device(self.test_device)
-            sleep(int(self.reboot_interval))  # wait till the device back to previous
-            take_photo(self.monitor)
-            test_img = get_screen_shot(self.monitor)
-            new_img = os.path.abspath(test_img)
-            dic = {'label_name': 'img_2', 'img': new_img, 'times': i+1}
-            self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
-            print(i, '次重启')
-            sleep(1)
-            flag = compare_two_pics(sample_img, test_img)  # if the black screen occurs, break the loop
-            if flag:
-                self.black_screen_signal.emit(flag)
-                break
-        clear_photos(self.monitor)
+        if self.test_device.find('555') == -1:
+            print('go to telnet reboot process')
+            tn = TelnetClient(ip=self.test_device, username="root", password="gemvary")
+            for i in range(0, self.times):
+                tn.login()
+                tn.execute_command("reboot")
+                sleep(int(self.reboot_interval))  # wait till the device back to previous
+                take_photo(self.monitor)
+                test_img = get_screen_shot(self.monitor)
+                new_img = os.path.abspath(test_img)
+                dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1}
+                self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+                print(i, '次重启')
+                sleep(1)
+                flag = compare_two_pics(sample_img, test_img)
+                # if the black screen occurs, break the loop
+                if flag:
+                    self.black_screen_signal.emit(flag)
+                    break
+        else:
+            for i in range(0, self.times):
+                adb_connect_device(self.test_device)
+                reboot_target_device(self.test_device)
+                sleep(int(self.reboot_interval))  # wait till the device back to previous
+                take_photo(self.monitor)
+                test_img = get_screen_shot(self.monitor)
+                new_img = os.path.abspath(test_img)
+                dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1}
+                self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+                print(i, '次重启')
+                sleep(1)
+                flag = compare_two_pics(sample_img, test_img)
+                # if the black screen occurs, break the loop
+                if flag:
+                    self.black_screen_signal.emit(flag)
+                    break
+        clear_photos(self.monitor)  # clear photos after test
+
+
+class TelnetClient(object):
+
+    def __init__(self, *args, **kwargs):
+        # 获取 IP 用户名 密码
+        self.ip = kwargs.pop("ip")
+        self.username = kwargs.pop("username")
+        self.password = kwargs.pop("password")
+        self.tn = telnetlib.Telnet()
+
+    def login(self):
+        try:
+            self.tn.open(host=self.ip, port=23)
+            self.tn.set_debuglevel(2)
+            print(f"telnet {self.ip} ")
+        except Exception as e:
+            print(e)
+            return False
+        # 等待login出现后输入用户名，最多等待5秒
+        # 输入登录用户名
+        print(f"login: {self.username} ")
+        self.tn.read_until(b'login: ')
+        self.tn.read_until(b'Username:', timeout=2)
+        self.tn.write(self.username.encode('ascii') + b'\n')
+        # 等待Password出现后输入用户名，最多等待5秒
+        print(f"password: {self.password} ")
+        self.tn.read_until(b'Password:', timeout=2)
+        self.tn.write(self.password.encode('ascii') + b'\n')
+        # 延时两秒再收取返回结果，给服务端足够响应时间
+        time.sleep(2)
+        # 获取登录结果
+        # read_very_eager()获取到的是的是上次获取之后本次获取之前的所有输出
+        command_result = self.tn.read_very_eager().decode('UTF-8')
+        if "error" not in command_result:
+            print(f"{self.ip}  登录成功")
+            return True
+        else:
+            print(f"{self.ip}  登录失败，用户名或密码错误")
+            return False
+
+    def execute_command(self, command):
+        try:
+            if command == "reboot":
+                self.tn.write(command.encode('UTF-8') + b'\n')
+                return
+            self.tn.write(command.encode('UTF-8') + b'\n')
+            time.sleep(2)
+            # 获取命令结果
+            command_result = self.tn.read_very_eager().decode('UTF-8')
+            return command_result
+        except Exception as e:
+            print(e)
+
+    def logout(self):
+        self.tn.write(b"exit\n")
 
 
 if __name__ == '__main__':

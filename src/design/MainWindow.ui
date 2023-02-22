@@ -30,11 +30,21 @@
     </column>
     <item>
      <property name="text">
+      <string>设备管理</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
       <string>基线</string>
      </property>
      <item>
       <property name="text">
        <string>对讲声音调试</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>循环重启测试</string>
       </property>
      </item>
     </item>
@@ -49,7 +59,7 @@
      </rect>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="page">
      <widget class="QFrame" name="frame_2">
@@ -172,8 +182,8 @@
        <rect>
         <x>10</x>
         <y>21</y>
-        <width>751</width>
-        <height>631</height>
+        <width>791</width>
+        <height>611</height>
        </rect>
       </property>
       <column>
