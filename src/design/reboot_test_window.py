@@ -36,7 +36,7 @@ def check_device_platform(adb_address):
        get the platform of device
 
     """
-    output = subprocess.check_output('adb -s ' + adb_address + ' shell getprop | grep platform ').decode().splitlines()
+    output = subprocess.check_output('adb -s ' + adb_address + ' shell getprop | grep platform ',  creationflags=0x08000000).decode().splitlines()
     return output[0]
 
 
@@ -52,9 +52,9 @@ def reboot_target_device(adb_address):
 
 
 def take_photo(adb_address):
-    os.popen('adb -s ' + adb_address + ' shell am start -a android.media.action.STILL_IMAGE_CAMERA')
+    run_cmd('adb -s ' + adb_address + ' shell am start -a android.media.action.STILL_IMAGE_CAMERA')
     sleep(3)
-    os.popen('adb -s ' + adb_address + ' shell input keyevent 27')
+    run_cmd('adb -s ' + adb_address + ' shell input keyevent 27')
     sleep(6)
 
 
@@ -66,11 +66,11 @@ def get_screen_shot(adb_address, device_id):
     correct_img = ' '
     if platform.find('3288') != -1:
         np = subprocess.Popen("adb -s " + adb_address + " shell ls -t /storage/emulated/0/DCIM/Camera/ ",
-                         stdout=subprocess.PIPE, shell=True)
+                         stdout=subprocess.PIPE, shell=True, creationflags=0x08000000)
         correct_img = np.stdout.readline().decode().strip()
     else:
         p = subprocess.Popen("adb -s " + adb_address + " shell ls /storage/emulated/0/DCIM/Camera/ ",
-                         stdout=subprocess.PIPE, shell=True)
+                         stdout=subprocess.PIPE, shell=True, creationflags=0x08000000)
         sub_stdout = p.stdout.read().decode()
         for i in sub_stdout.split('\r\r'):
             print(i)
@@ -89,14 +89,14 @@ def get_screen_shot(adb_address, device_id):
     print(export_img_path)
     # 将这个文件pull到本地电脑上
     adbcode = "adb -s " + adb_address + " pull /storage/emulated/0/DCIM/Camera/" + correct_img + " " + export_img_path
-    os.popen(adbcode)
+    run_cmd(adbcode)
     sleep(1)
     return export_img_path
 
 
 def clear_photos(adb_address):
     subprocess.Popen("adb -s " + adb_address + " shell rm -r /storage/emulated/0/DCIM/Camera/ ",
-                     stdout=subprocess.PIPE, shell=True)
+                     stdout=subprocess.PIPE, shell=True, creationflags=0x08000000)
 
 
 def compare_two_pics(sample_image, test_image):
@@ -224,7 +224,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
             self.result.setText("测试正常，未出现黑屏")
 
     def detect_adb_devices(self):
-        output = subprocess.check_output("adb devices").decode().splitlines()
+        output = subprocess.check_output("adb devices",  creationflags=0x08000000).decode().splitlines()
         print(output)
         device = output[1].split('\t')[0]
         return device
