@@ -9,11 +9,15 @@ import time
 from time import sleep
 
 import cv2
+import loguru
 from PyQt5 import QtGui
 from PyQt5.QtCore import QThread, pyqtSignal, QDir
 from PyQt5.QtWidgets import QMainWindow, QApplication, QSlider, QMessageBox, QFileDialog
 
+
 from ui.mainScreen import Ui_MainWindow
+
+loguru.logger.add("file_{time}.log")
 
 
 # command ：需要执行的cmd命令
@@ -90,7 +94,7 @@ def get_screen_shot(adb_address, device_id):
     # 将这个文件pull到本地电脑上
     adbcode = "adb -s " + adb_address + " pull /storage/emulated/0/DCIM/Camera/" + correct_img + " " + export_img_path
     run_cmd(adbcode)
-    sleep(1)
+    sleep(2)
     return export_img_path
 
 
@@ -103,6 +107,7 @@ def compare_two_pics(sample_image, test_image):
     """
     :return Boolean  return True if the black screen occurs
     """
+    loguru.logger.info('start comparing pictures:' + sample_image + test_image)
     img = cv2.imread(sample_image)
     img_target = cv2.imread(test_image)
     print(type(img))
@@ -274,8 +279,9 @@ class RebootThread(QThread):
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
                 take_photo(self.monitor)
                 test_img = get_screen_shot(self.monitor, self.test_device)
-                new_img = os.path.abspath(test_img)
-                dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1}
+               # new_img = os.path.abspath(test_img)
+                dic = {'label_name': 'img_2', 'img': test_img, 'times': i + 1}
+                loguru.logger.debug('return dict to main window thread:' + str(dic))
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
                 print(i, '次重启')
                 sleep(1)
@@ -283,7 +289,6 @@ class RebootThread(QThread):
                 # if the black screen occurs, break the loop
                 if flag:
                     self.black_screen_signal.emit(flag)
-  #                  break
         clear_photos(self.monitor)  # clear photos after test
 
 
