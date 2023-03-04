@@ -16,13 +16,19 @@ from PyQt5.QtWidgets import QMainWindow, QApplication, QSlider, QMessageBox, QFi
 from ui.mainScreen import Ui_MainWindow
 
 
+# command ：需要执行的cmd命令
+# 0x08000000: 屏蔽命令
+def run_cmd(command):
+    subprocess.call(command, creationflags=0x08000000)
+
+
 def adb_connect_device(adb_address):
     """
        connect the device via the adb address
 
     """
     cmd = 'adb connect ' + adb_address
-    os.system(cmd)
+    run_cmd(cmd)
 
 
 def check_device_platform(adb_address):
@@ -42,7 +48,7 @@ def reboot_target_device(adb_address):
 
     """
     cmd = 'adb -s ' + adb_address + ' reboot'
-    os.popen(cmd)
+    run_cmd(cmd)
 
 
 def take_photo(adb_address):
@@ -52,7 +58,10 @@ def take_photo(adb_address):
     sleep(6)
 
 
-def get_screen_shot(adb_address):
+def get_screen_shot(adb_address, device_id):
+    """
+    use the device_id as the dir name for exporting captured photos
+    """
     platform = check_device_platform(adb_address)
     correct_img = ' '
     if platform.find('3288') != -1:
@@ -73,11 +82,16 @@ def get_screen_shot(adb_address):
     else:
         print('get screen shot', correct_img)
     sleep(1)
+    local_dir = str(device_id).replace(':', '_')
+    if os.path.exists(local_dir) is not True:
+        os.mkdir(local_dir)  # if dir is not exists, make a new dir
+    export_img_path = os.getcwd() + '/' + local_dir + '/' + correct_img
+    print(export_img_path)
     # 将这个文件pull到本地电脑上
-    adbcode = "adb -s " + adb_address + " pull /storage/emulated/0/DCIM/Camera/" + str(correct_img)
+    adbcode = "adb -s " + adb_address + " pull /storage/emulated/0/DCIM/Camera/" + correct_img + " " + export_img_path
     os.popen(adbcode)
     sleep(1)
-    return correct_img
+    return export_img_path
 
 
 def clear_photos(adb_address):
@@ -129,7 +143,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         # 设置最小值
         self.rebootSlider.setMinimum(1)
         # 设置最大值
-        self.rebootSlider.setMaximum(500)
+        self.rebootSlider.setMaximum(300)
         self.timeSlider.setMinimum(12)
         self.timeSlider.setMaximum(150)
         self.rebootSlider.setTickPosition(QSlider.TicksRight)
@@ -230,7 +244,7 @@ class RebootThread(QThread):
         # take the first photo as the sample img
         adb_connect_device(self.monitor)
         take_photo(self.monitor)
-        sample_img = get_screen_shot(self.monitor)
+        sample_img = get_screen_shot(self.monitor, self.test_device)  # use the test_device as the name of dir
         cover_img = os.path.abspath(sample_img)
         dic = {'label_name': 'img_1', 'img': cover_img}
         self.signal.emit(dic)  # 返回字典判断是画哪个图像
@@ -242,7 +256,7 @@ class RebootThread(QThread):
                 tn.execute_command("reboot")
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
                 take_photo(self.monitor)
-                test_img = get_screen_shot(self.monitor)
+                test_img = get_screen_shot(self.monitor, self.test_device)
                 new_img = os.path.abspath(test_img)
                 dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1}
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
@@ -252,14 +266,14 @@ class RebootThread(QThread):
                 # if the black screen occurs, break the loop
                 if flag:
                     self.black_screen_signal.emit(flag)
-                    break
+          #          break
         else:
             for i in range(0, self.times):
                 adb_connect_device(self.test_device)
                 reboot_target_device(self.test_device)
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
                 take_photo(self.monitor)
-                test_img = get_screen_shot(self.monitor)
+                test_img = get_screen_shot(self.monitor, self.test_device)
                 new_img = os.path.abspath(test_img)
                 dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1}
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
@@ -269,7 +283,7 @@ class RebootThread(QThread):
                 # if the black screen occurs, break the loop
                 if flag:
                     self.black_screen_signal.emit(flag)
-                    break
+  #                  break
         clear_photos(self.monitor)  # clear photos after test
 
 
