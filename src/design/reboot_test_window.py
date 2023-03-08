@@ -23,7 +23,25 @@ loguru.logger.add("file_{time}.log")
 # command ：需要执行的cmd命令
 # 0x08000000: 屏蔽命令
 def run_cmd(command):
-    subprocess.call(command, creationflags=0x08000000)
+    try:
+        subprocess.check_output(command, stderr=subprocess.STDOUT, creationflags=0x08000000)
+        # do something with output
+        loguru.logger.debug(command)
+    except subprocess.CalledProcessError:
+        loguru.logger.debug(subprocess.CalledProcessError)
+
+
+def detect_adb_devices():
+    """
+         get adb devices address
+    """
+    output = subprocess.check_output("adb devices",  creationflags=0x08000000).decode().splitlines()
+    print(output)
+    if output.__len__() <= 2:
+        loguru.logger.debug('no adb devices found')
+        return False
+    device = output[1].split('\t')[0]
+    return device
 
 
 def adb_connect_device(adb_address):
@@ -32,7 +50,12 @@ def adb_connect_device(adb_address):
 
     """
     cmd = 'adb connect ' + adb_address
-    run_cmd(cmd)
+    loguru.logger.debug(cmd)
+    try:
+        subprocess.call(cmd, creationflags=0x08000000)
+    except subprocess.CalledProcessError:
+        loguru.logger.debug(subprocess.CalledProcessError)
+        return
 
 
 def check_device_platform(adb_address):
@@ -51,7 +74,8 @@ def reboot_target_device(adb_address):
        reboot the device via the adb address
 
     """
-    cmd = 'adb -s ' + adb_address + ' reboot'
+    adb_connect_device(adb_address)  # reconnect to assure the connection
+    cmd = 'adb -s ' + adb_address + ' shell reboot'
     run_cmd(cmd)
 
 
@@ -71,21 +95,22 @@ def get_screen_shot(adb_address, device_id):
     if platform.find('3288') != -1:
         np = subprocess.Popen("adb -s " + adb_address + " shell ls -t /storage/emulated/0/DCIM/Camera/ ",
                          stdout=subprocess.PIPE, shell=True, creationflags=0x08000000)
+        sleep(2)
         correct_img = np.stdout.readline().decode().strip()
     else:
         p = subprocess.Popen("adb -s " + adb_address + " shell ls /storage/emulated/0/DCIM/Camera/ ",
                          stdout=subprocess.PIPE, shell=True, creationflags=0x08000000)
+        sleep(2)
         sub_stdout = p.stdout.read().decode()
         for i in sub_stdout.split('\r\r'):
-            print(i)
             if (i.strip()) > correct_img:
                 correct_img = i.strip()  # select the newest img
-    print('correct img:', correct_img)
+    loguru.logger.debug('correct img:' + correct_img)
     if correct_img is None:
         return
     else:
-        print('get screen shot', correct_img)
-    sleep(1)
+        loguru.logger.debug('get correct img:' + correct_img)
+    # 将这个文件pull到本地电脑上
     local_dir = str(device_id).replace(':', '_')
     if os.path.exists(local_dir) is not True:
         os.mkdir(local_dir)  # if dir is not exists, make a new dir
@@ -94,7 +119,7 @@ def get_screen_shot(adb_address, device_id):
     # 将这个文件pull到本地电脑上
     adbcode = "adb -s " + adb_address + " pull /storage/emulated/0/DCIM/Camera/" + correct_img + " " + export_img_path
     run_cmd(adbcode)
-    sleep(2)
+    sleep(1)
     return export_img_path
 
 
@@ -104,15 +129,13 @@ def clear_photos(adb_address):
 
 
 def compare_two_pics(sample_image, test_image):
+
     """
     :return Boolean  return True if the black screen occurs
     """
-    loguru.logger.info('start comparing pictures:' + sample_image + test_image)
     img = cv2.imread(sample_image)
     img_target = cv2.imread(test_image)
-    print(type(img))
     source_img = cv2.split(img)
-
     target_img = cv2.split(img_target)
     histSize = [256]
     histRange = [0, 256]
@@ -121,19 +144,9 @@ def compare_two_pics(sample_image, test_image):
     hist_target = cv2.calcHist(target_img, [0], None, histSize, histRange,
                                True)  # 第一个参数是输入图像列表， 第二个是需要处理的通道列表， 第三个是图像掩膜
     result = cv2.compareHist(hist_origin, hist_target, cv2.HISTCMP_CORREL)
-    print('测试:', result)
+    loguru.logger.debug('comparing result' + str(result))
     if result <= 0.75:  # 判断相似度<=0.75 时为出现黑屏现象
         return True
-
-
-class RebootThread(QThread):
-    """
-    Start reboot thread
-    """
-    signal = pyqtSignal(bool)  # 创建任务信号
-
-    def run(self):
-        pass
 
 
 class RebootWindow(QMainWindow, Ui_MainWindow):
@@ -210,9 +223,11 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         """
         set the img
         """
-        print('handle callback')
+        if dic.get('device_exist') is not True:
+            QMessageBox.about(self, '提示', '未连接监控设备，请检查')
+            return
         if dic.get('label_name') == 'img_1':
-            print(dic.get('img'))
+            loguru.logger.debug('receive data to draw:' + str(dic))
            # image = QtGui.QPixmap(img_path).scaled(520, 500)
             image = QtGui.QPixmap(dic.get('img')).scaled(520, 500)
             self.img_1.setPixmap(image)
@@ -229,7 +244,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
             self.result.setText("测试正常，未出现黑屏")
 
     def detect_adb_devices(self):
-        output = subprocess.check_output("adb devices",  creationflags=0x08000000).decode().splitlines()
+        output = subprocess.check_output("adb devices").decode().splitlines()
         print(output)
         device = output[1].split('\t')[0]
         return device
@@ -243,15 +258,20 @@ class RebootThread(QThread):
     black_screen_signal = pyqtSignal(bool)
 
     def run(self):
-        print('enter subprocess')
+        loguru.logger.info('satrt rebooting test')
         #  if the 555 or 5555 not in the setting, go to the telnet reboot process
-        digital_device_flag = False
         # take the first photo as the sample img
         adb_connect_device(self.monitor)
+        if detect_adb_devices() is False:
+            dic = {'device_exist': False}
+            self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+            return
         take_photo(self.monitor)
         sample_img = get_screen_shot(self.monitor, self.test_device)  # use the test_device as the name of dir
         cover_img = os.path.abspath(sample_img)
-        dic = {'label_name': 'img_1', 'img': cover_img}
+        if cover_img == ' ':
+            return
+        dic = {'label_name': 'img_1', 'img': cover_img, 'device_exist': True}
         self.signal.emit(dic)  # 返回字典判断是画哪个图像
         if self.test_device.find('555') == -1:
             print('go to telnet reboot process')
@@ -263,32 +283,37 @@ class RebootThread(QThread):
                 take_photo(self.monitor)
                 test_img = get_screen_shot(self.monitor, self.test_device)
                 new_img = os.path.abspath(test_img)
-                dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1}
+                if new_img == ' ':
+                    return
+                dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1,'device_exist': True}
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
-                print(i, '次重启')
+                loguru.logger.debug(str(f"{i}")+"time reboot")
                 sleep(1)
                 flag = compare_two_pics(sample_img, test_img)
                 # if the black screen occurs, break the loop
                 if flag:
                     self.black_screen_signal.emit(flag)
-          #          break
+                    break
         else:
             for i in range(0, self.times):
+                loguru.logger.debug(str(f"{i}")+"time reboot")
                 adb_connect_device(self.test_device)
+                sleep(2)  # wait till connected
                 reboot_target_device(self.test_device)
+                loguru.logger.debug('sleep' + str(self.reboot_interval))
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
                 take_photo(self.monitor)
                 test_img = get_screen_shot(self.monitor, self.test_device)
-               # new_img = os.path.abspath(test_img)
-                dic = {'label_name': 'img_2', 'img': test_img, 'times': i + 1}
-                loguru.logger.debug('return dict to main window thread:' + str(dic))
+                new_img = os.path.abspath(test_img)
+                dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1, 'device_exist': True}
+                loguru.logger.debug(str(dic))
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
-                print(i, '次重启')
                 sleep(1)
                 flag = compare_two_pics(sample_img, test_img)
                 # if the black screen occurs, break the loop
                 if flag:
                     self.black_screen_signal.emit(flag)
+                    break
         clear_photos(self.monitor)  # clear photos after test
 
 
