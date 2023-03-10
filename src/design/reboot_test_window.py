@@ -172,6 +172,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.force_reboot_flag = True
         self.sin1 = pyqtSignal(bool)
 
+
     def inte(self):
         self.force_reboot_flag = False
 
@@ -218,6 +219,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.reboot_thread.signal.connect(self.handle_test)  # get img from the subprocess
         self.reboot_thread.black_screen_signal.connect(self.handle_black_screen)
         self.reboot_thread.start()
+        self.reboot_thread.int_flag = self.int_radio.isChecked()
 
     def handle_test(self, dic):
         """
@@ -291,8 +293,8 @@ class RebootThread(QThread):
                 sleep(1)
                 flag = compare_two_pics(sample_img, test_img)
                 # if the black screen occurs, break the loop
-                if flag:
-                    self.black_screen_signal.emit(flag)
+                self.black_screen_signal.emit(flag)
+                if flag is True and self.int_flag is True:
                     break
         else:
             for i in range(0, self.times):
@@ -310,8 +312,8 @@ class RebootThread(QThread):
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
                 sleep(1)
                 flag = compare_two_pics(sample_img, test_img)
-                # if the black screen occurs, break the loop
-                if flag:
+                # if the black screen occurs and the int flag is true,  break the loop
+                if flag and self.int_flag:
                     self.black_screen_signal.emit(flag)
                     break
         clear_photos(self.monitor)  # clear photos after test
