@@ -7,6 +7,7 @@ import sys
 import telnetlib
 import time
 from time import sleep
+from common import test_ocr
 
 import cv2
 import loguru
@@ -30,6 +31,20 @@ def run_cmd(command):
     except subprocess.CalledProcessError:
         loguru.logger.debug(subprocess.CalledProcessError)
 
+
+def check_device_in_adb(device_id):
+    """
+        check whether device in adb devices list
+    """
+    output = subprocess.check_output("adb devices",  creationflags=0x08000000).decode().splitlines()
+    if output.__len__() <= 2:
+        loguru.logger.debug('no adb devices found')
+        return False
+    for i in output[1].split('\t'):
+        if i == device_id:
+            return True
+        else:
+            return False
 
 def detect_adb_devices():
     """
@@ -274,6 +289,7 @@ class RebootThread(QThread):
         if cover_img == ' ':
             return
         dic = {'label_name': 'img_1', 'img': cover_img, 'device_exist': True}
+        test_ocr.ocr_detect(cover_img)
         self.signal.emit(dic)  # 返回字典判断是画哪个图像
         if self.test_device.find('555') == -1:
             print('go to telnet reboot process')
@@ -304,7 +320,12 @@ class RebootThread(QThread):
                 reboot_target_device(self.test_device)
                 loguru.logger.debug('sleep' + str(self.reboot_interval))
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
-                take_photo(self.monitor)
+                if check_device_in_adb(self.monitor):  # check the device in list before taking photo
+                    take_photo(self.monitor)
+                else:
+                    dic = {'device_exist': False}
+                    self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+                    return
                 test_img = get_screen_shot(self.monitor, self.test_device)
                 new_img = os.path.abspath(test_img)
                 dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1, 'device_exist': True}
