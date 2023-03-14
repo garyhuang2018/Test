@@ -132,9 +132,10 @@ def get_screen_shot(adb_address, device_id):
     """
     use the device_id as the dir name for exporting captured photos
     """
+    if check_device_platform(adb_address) is None:
+        return
     platform = check_device_platform(adb_address)
     correct_img = ' '
-    if platform.find('3288') is None: return
     if platform.find('3288') != -1:
         np = subprocess.Popen("adb -s " + adb_address + " shell ls -t /storage/emulated/0/DCIM/Camera/ ",
                          stdout=subprocess.PIPE, shell=True, creationflags=0x08000000)
