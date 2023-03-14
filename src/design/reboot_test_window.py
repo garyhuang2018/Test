@@ -30,6 +30,7 @@ def run_cmd(command):
         loguru.logger.debug(command)
     except subprocess.CalledProcessError:
         loguru.logger.debug(subprocess.CalledProcessError)
+        return '执行错误'
 
 
 def check_device_in_adb(device_id):
@@ -45,6 +46,7 @@ def check_device_in_adb(device_id):
             return True
         else:
             return False
+
 
 def detect_adb_devices():
     """
@@ -66,11 +68,12 @@ def adb_connect_device(adb_address):
     """
     cmd = 'adb connect ' + adb_address
     loguru.logger.debug(cmd)
-    try:
-        subprocess.call(cmd, creationflags=0x08000000)
-    except subprocess.CalledProcessError:
-        loguru.logger.debug(subprocess.CalledProcessError)
-        return
+    output = subprocess.check_output(cmd, creationflags=0x08000000).decode().splitlines()
+    for i in output:
+        if i.find(adb_address)!=-1:
+            return True
+        else:
+            return False
 
 
 def check_device_platform(adb_address):
@@ -78,8 +81,22 @@ def check_device_platform(adb_address):
        get the platform of device
 
     """
-    output = subprocess.check_output('adb -s ' + adb_address + ' shell getprop | grep platform ',  creationflags=0x08000000).decode().splitlines()
-    return output[0]
+    for i in range(1, 4):
+        if check_device_in_adb(adb_address) is True:  # reconnect the monitor device before taking photo
+            loguru.logger.debug('check device:' + detect_adb_devices())
+            try:
+                output = subprocess.check_output('adb -s ' + adb_address + ' shell getprop | grep platform ',
+                                                 creationflags=0x08000000).decode().splitlines()
+                return output[0]
+            except subprocess.CalledProcessError:
+                loguru.logger.debug(subprocess.CalledProcessError)
+                return
+        else:
+            loguru.logger.debug('can not connect to', adb_address)
+            sleep(i * 10)
+            adb_connect_device(adb_address)
+            if i == 3:
+                break
 
 
 def reboot_target_device(adb_address):
@@ -89,16 +106,26 @@ def reboot_target_device(adb_address):
        reboot the device via the adb address
 
     """
-    adb_connect_device(adb_address)  # reconnect to assure the connection
     cmd = 'adb -s ' + adb_address + ' shell reboot'
     run_cmd(cmd)
 
 
 def take_photo(adb_address):
-    run_cmd('adb -s ' + adb_address + ' shell am start -a android.media.action.STILL_IMAGE_CAMERA')
-    sleep(3)
-    run_cmd('adb -s ' + adb_address + ' shell input keyevent 27')
-    sleep(6)
+    for i in range(1, 4):
+        if check_device_in_adb(adb_address) is not True:  # reconnect the monitor device before taking photo
+            loguru.logger.debug('can not connect to', adb_address)
+            sleep(i*10)
+            adb_connect_device(adb_address)
+        else:
+            run_cmd('adb -s ' + adb_address + ' shell am start -a android.media.action.STILL_IMAGE_CAMERA')
+            sleep(2)
+        if check_device_in_adb(adb_address) is not True:  # reconnect the monitor device before taking photo
+            loguru.logger.debug('can not connect to', adb_address)
+            adb_connect_device(adb_address)
+        else:
+            run_cmd('adb -s ' + adb_address + ' shell input keyevent 27')
+            sleep(6)
+            break
 
 
 def get_screen_shot(adb_address, device_id):
@@ -107,6 +134,7 @@ def get_screen_shot(adb_address, device_id):
     """
     platform = check_device_platform(adb_address)
     correct_img = ' '
+    if platform.find('3288') is None: return
     if platform.find('3288') != -1:
         np = subprocess.Popen("adb -s " + adb_address + " shell ls -t /storage/emulated/0/DCIM/Camera/ ",
                          stdout=subprocess.PIPE, shell=True, creationflags=0x08000000)
@@ -275,7 +303,8 @@ class RebootThread(QThread):
     black_screen_signal = pyqtSignal(bool)
 
     def run(self):
-        loguru.logger.info('satrt rebooting test')
+        monitor = self.monitor
+        loguru.logger.info('satrt rebooting test:' + monitor)
         #  if the 555 or 5555 not in the setting, go to the telnet reboot process
         # take the first photo as the sample img
         adb_connect_device(self.monitor)
@@ -298,6 +327,7 @@ class RebootThread(QThread):
                 tn.login()
                 tn.execute_command("reboot")
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
+                loguru.logger.debug('device address:' + self.monitor)
                 take_photo(self.monitor)
                 test_img = get_screen_shot(self.monitor, self.test_device)
                 new_img = os.path.abspath(test_img)
@@ -317,12 +347,16 @@ class RebootThread(QThread):
                 loguru.logger.debug(str(f"{i}")+"time reboot")
                 adb_connect_device(self.test_device)
                 sleep(2)  # wait till connected
-                reboot_target_device(self.test_device)
-                loguru.logger.debug('sleep' + str(self.reboot_interval))
-                sleep(int(self.reboot_interval))  # wait till the device back to previous
                 if check_device_in_adb(self.monitor):  # check the device in list before taking photo
-                    take_photo(self.monitor)
+                    reboot_target_device(self.test_device)
+                    loguru.logger.debug('sleep' + str(self.reboot_interval))
+                    sleep(int(self.reboot_interval))  # wait till the device back to previous
+                    take_photo(monitor)
                 else:
+                    dic = {'device_exist': False}
+                    self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+                    return
+                if get_screen_shot(self.monitor, self.test_device) is None:
                     dic = {'device_exist': False}
                     self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
                     return
