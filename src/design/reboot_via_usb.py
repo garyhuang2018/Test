@@ -43,6 +43,7 @@ def check_device_in_adb(device_id):
         loguru.logger.debug('no adb devices found')
         return False
     for i in output[1].split('\t'):
+        print(i)
         if i == device_id:
             return True
         else:
@@ -180,7 +181,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.rebootSlider.setTickPosition(QSlider.TicksRight)
         self.rebootSlider.valueChanged[int].connect(self.changevalue)
         self.timeSlider.valueChanged[int].connect(self.changetime)
-        self.force_reboot_btn.clicked.connect(self.force_reboot)
+        self.img_path_btn.clicked.connect(self.open_img_path)
         self.force_int_btn.clicked.connect(self.inte)
         self.force_reboot_flag = True
         self.sin1 = pyqtSignal(bool)
@@ -189,12 +190,10 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
     def inte(self):
         self.force_reboot_flag = False
 
-    def force_reboot(self):
-        for i in range(0, self.rebootSlider.value()):
-            if self.force_reboot_flag:
-                sleep(1)
-                print('test_int', i)
-           # reboot_target_device(self.test_id.text())
+    def open_img_path(self):
+        os.system("explorer.exe .")
+        print('hello')
+
 
     def open_setting(self):
         """
@@ -280,26 +279,48 @@ class RebootThread(QThread):
         dic = {'label_name': 'img_1', 'img': cover_img, 'device_exist': True}
         self.signal.emit(dic)  # 返回字典判断是画哪个图像
         if self.test_device.find('555') == -1:
-            print('go to telnet reboot process')
-            tn = TelnetClient(ip=self.test_device, username="root", password="gemvary")
-            for i in range(0, self.times):
-                tn.login()
-                tn.execute_command("reboot")
-                sleep(int(self.reboot_interval))  # wait till the device back to previous
-                loguru.logger.debug('device address:' + self.monitor)
-                test_img = take_photo(self.monitor, self.test_device)
-                new_img = os.path.abspath(test_img)
-                if new_img == ' ':
-                    return
-                dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1,'device_exist': True}
-                self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
-                loguru.logger.debug(str(f"{i}")+"time reboot")
-                sleep(1)
-                flag = compare_two_pics(sample_img, test_img)
-                # if the black screen occurs, break the loop
-                self.black_screen_signal.emit(flag)
-                if flag is True and self.int_flag is True:
-                    break
+            if check_device_in_adb(self.test_device):
+                print('adb usb connect')
+                for i in range(0, self.times):
+                    loguru.logger.debug(str(f"{i}") + "time reboot")
+                    adb_connect_device(self.test_device)
+                    sleep(2)  # wait till connected
+                    reboot_target_device(self.test_device)
+                    loguru.logger.debug('sleep' + str(self.reboot_interval))
+                    sleep(int(self.reboot_interval))  # wait till the device back to previous
+                    test_img = take_photo(self.monitor, self.test_device)
+                    new_img = os.path.abspath(test_img)
+                    dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1, 'device_exist': True}
+                    loguru.logger.debug(str(dic))
+                    self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+                    sleep(1)
+                    flag = compare_two_pics(sample_img, test_img)
+                    # if the black screen occurs and the interrupt flag is true,  break the loop
+                    if flag and self.int_flag:
+                        self.black_screen_signal.emit(flag)
+                        break
+
+            else:
+                print('go to telnet reboot process')
+                tn = TelnetClient(ip=self.test_device, username="root", password="gemvary")
+                for i in range(0, self.times):
+                    tn.login()
+                    tn.execute_command("reboot")
+                    sleep(int(self.reboot_interval))  # wait till the device back to previous
+                    loguru.logger.debug('device address:' + self.monitor)
+                    test_img = take_photo(self.monitor, self.test_device)
+                    new_img = os.path.abspath(test_img)
+                    if new_img == ' ':
+                        return
+                    dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1,'device_exist': True}
+                    self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
+                    loguru.logger.debug(str(f"{i}")+"time reboot")
+                    sleep(1)
+                    flag = compare_two_pics(sample_img, test_img)
+                    # if the black screen occurs, break the loop
+                    self.black_screen_signal.emit(flag)
+                    if flag is True and self.int_flag is True:
+                        break
         else:
             for i in range(0, self.times):
                 loguru.logger.debug(str(f"{i}")+"time reboot")
@@ -315,7 +336,7 @@ class RebootThread(QThread):
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
                 sleep(1)
                 flag = compare_two_pics(sample_img, test_img)
-                # if the black screen occurs and the int flag is true,  break the loop
+                # if the black screen occurs and the interrupt flag is true,  break the loop
                 if flag and self.int_flag:
                     self.black_screen_signal.emit(flag)
                     break
