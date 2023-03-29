@@ -112,6 +112,14 @@ def reboot_target_device(adb_address):
     run_cmd(cmd)
 
 
+def check_reboot_result(adb_address):
+    try:
+        subprocess.check_output('adb -s ' + adb_address + ' shell reboot', creationflags=0x08000000).decode()
+        return True
+    except subprocess.CalledProcessError as err:
+        print("Command Error", err)
+        return False
+
 def take_photo(camera_id, device_id):
     print(camera_id)
     cap = cv2.VideoCapture(int(camera_id))
@@ -132,6 +140,8 @@ def take_photo(camera_id, device_id):
         sleep(1)
         cv2.imwrite(export_img_path, frame)
         print("save usb capture:" + str(index) + ".jpg successfuly!")
+        cap.release()
+        cv2.destroyAllWindows()
         return export_img_path
     cap.release()
     cv2.destroyAllWindows()
@@ -224,12 +234,18 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.img_1.clear()
         self.img_2.clear()
         self.result.clear()
+        if len(self.monitor_input.text()) < 2:
+            QMessageBox.warning(self, '错误提示', '未输入测试设备信息')
+            return
+        self.log_label.clear()
+        self.log_label.setText('开始测试')
         self.reboot_thread.monitor = self.monitor_input.text()
         self.reboot_thread.test_device = self.test_id.text()
         self.reboot_thread.times = self.rebootSlider.value()
         self.reboot_thread.reboot_interval = self.timeSlider.value()
         self.reboot_thread.signal.connect(self.handle_test)  # get img from the subprocess
         self.reboot_thread.black_screen_signal.connect(self.handle_black_screen)
+        self.reboot_thread.status_signal.connect(self.handle_status_update)  # update status
         self.reboot_thread.start()
         self.reboot_thread.int_flag = self.int_radio.isChecked()
 
@@ -257,6 +273,10 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         else:
             self.result.setText("测试正常，未出现黑屏")
 
+    def handle_status_update(self, status):
+        print('update status')
+        self.result.setText(status)
+
     def detect_adb_devices(self):
         output = subprocess.check_output("adb devices").decode().splitlines()
         print(output)
@@ -270,6 +290,7 @@ class RebootThread(QThread):
     """
     signal = pyqtSignal(dict)  # 创建任务信号
     black_screen_signal = pyqtSignal(bool)
+    status_signal = pyqtSignal(str)
 
     def run(self):
         sample_img = take_photo(self.monitor, self.test_device)
@@ -278,6 +299,7 @@ class RebootThread(QThread):
             return
         dic = {'label_name': 'img_1', 'img': cover_img, 'device_exist': True}
         self.signal.emit(dic)  # 返回字典判断是画哪个图像
+        flag = False  # flag for black screen, False for default
         if self.test_device.find('555') == -1:
             if check_device_in_adb(self.test_device):
                 print('adb usb connect')
@@ -285,7 +307,6 @@ class RebootThread(QThread):
                     loguru.logger.debug(str(f"{i}") + "time reboot")
                     adb_connect_device(self.test_device)
                     sleep(2)  # wait till connected
-                    reboot_target_device(self.test_device)
                     loguru.logger.debug('sleep' + str(self.reboot_interval))
                     sleep(int(self.reboot_interval))  # wait till the device back to previous
                     test_img = take_photo(self.monitor, self.test_device)
@@ -299,7 +320,7 @@ class RebootThread(QThread):
                     if flag and self.int_flag:
                         self.black_screen_signal.emit(flag)
                         break
-
+                self.black_screen_signal.emit(flag)
             else:
                 print('go to telnet reboot process')
                 tn = TelnetClient(ip=self.test_device, username="root", password="gemvary")
@@ -326,7 +347,13 @@ class RebootThread(QThread):
                 loguru.logger.debug(str(f"{i}")+"time reboot")
                 adb_connect_device(self.test_device)
                 sleep(2)  # wait till connected
-                reboot_target_device(self.test_device)
+                if check_reboot_result(self.test_device) is not True:
+                    status = '无法重启'
+                    self.status_signal.emit(str(status))
+                    break
+                else:
+                    status = str(i+1) + '次重启中'
+                    self.status_signal.emit(str(status))
                 loguru.logger.debug('sleep' + str(self.reboot_interval))
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
                 test_img = take_photo(self.monitor, self.test_device)
