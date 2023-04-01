@@ -129,6 +129,18 @@ def midian_blur(img):
 
     cv.drawContours(Gn, cnt, -1, (0, 255, 0), 3)
     cv.imshow("img", Gn)
+
+    #
+    # mask = np.zeros(Gn.shape, np.uint8)  # 生成黑背景，即全为0
+    # mask = cv.drawContours(mask, cnt, -1, (255, 255, 255), -1)  # 绘制轮廓，形成掩膜
+    # cv.imshow("mask", mask)  # 显示掩膜
+    # result = cv.bitwise_and(Gn, mask)  # 按位与操作，得到掩膜区域
+    # cv.imshow("result", result)  # 显示图像中提取掩膜区域
+
+   # mask = cv.drawContours(Gn, cnt, -1, (0, 255, 0), 3)
+ #   result = cv.bitwise_and(Gn, mask)  # 按位与操作，得到掩膜区域
+ #   cv.imshow("result", result)  # 显示图像中提取掩膜区域
+  #  cv.imshow("img", Gn)
     epsilon = 0.01 * cv.arcLength(cnt, True)
     print(epsilon)
     cv.waitKey()
@@ -140,7 +152,6 @@ def black_proportion(thresh1):
     """
     :get the black proportion
     """
-
     x, y = thresh1.shape
     bk = 0
     wt = 0
@@ -187,10 +198,111 @@ def boundingBox(idx, c):
             return None
 
 
+def new_method(img):
+    img = cv.imread(img)  # 载入图像
+    h, w = img.shape[:2]  # 获取图像的高和宽
+    cv.imshow("Origin", img)  # 显示原始图像
+
+    blured = cv.blur(img, (5, 5))  # 进行滤波去掉噪声
+    cv.imshow("Blur", blured)  # 显示低通滤波后的图像
+
+    mask = np.zeros((h + 2, w + 2), np.uint8)  # 掩码长和宽都比输入图像多两个像素点，满水填充不会超出掩码的非零边缘
+    # 进行泛洪填充
+    cv.floodFill(blured, mask, (w - 1, h - 1), (255, 255, 255), (2, 2, 2), (3, 3, 3), 8)
+    cv.imshow("floodfill", blured)
+
+    # 得到灰度图
+    gray = cv.cvtColor(blured, cv.COLOR_BGR2GRAY)
+    cv.imshow("gray", gray)
+
+    # 定义结构元素
+    kernel = cv.getStructuringElement(cv.MORPH_RECT, (50, 50))
+    # 开闭运算，先开运算去除背景噪声，再继续闭运算填充目标内的孔洞
+    opened = cv.morphologyEx(gray, cv.MORPH_OPEN, kernel)
+    closed = cv.morphologyEx(opened, cv.MORPH_CLOSE, kernel)
+    cv.imshow("closed", closed)
+
+    # 求二值图
+    ret, binary = cv.threshold(closed, 250, 255, cv.THRESH_BINARY)
+    cv.imshow("binary", binary)
+
+    # 找到轮廓
+    contours, hierarchy = cv.findContours(binary, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
+    # find the main island (biggest area)
+    cnt = contours[0]
+    max_area = cv.contourArea(cnt)
+
+    for cont in contours:
+        if cv.contourArea(cont) > max_area:
+            cnt = cont
+            max_area = cv.contourArea(cont)
+    # 绘制轮廓
+    cv.drawContours(img, contours, -1, (0, 0, 255), 3)
+    # 绘制结果
+    cv.imshow("result", img)
+    cv.waitKey(0)
+    cv.destroyAllWindows()
+    return img
+
+
+def cut_photo(img):
+    img = cv.imread(img)  # 载入图像
+    h, w = img.shape[:2]  # 获取图像的高和宽
+    print(h,w)
+    # Select ROI
+    r = cv.selectROI("select the area", img)
+
+    # Crop image
+    cropped_image = img[int(r[1]):int(r[1] + r[3]),
+                    int(r[0]):int(r[0] + r[2])]
+
+    # Display cropped image
+    cv.imshow("Cropped image", cropped_image)
+    local_dir = str("tefe").replace(':', '_')
+    if os.path.exists(local_dir) is not True:
+        os.mkdir(local_dir)  # if dir is not exists, make a new dir
+    curr_time = datetime.now()
+    timestamp = datetime.strftime(curr_time, '%Y-%m-%d-%H-%M-%S')
+    export_img_path = os.getcwd() + '/' + local_dir + '/' + timestamp + ".jpg"
+    print(export_img_path)
+    sleep(1)
+    cv.imwrite(export_img_path, cropped_image)
+    # cv.imwrite('test', cropped_image)
+    cv.waitKey(0)
+    # ret, thresh1 = cv.threshold(img, 135, 255, cv.THRESH_BINARY)
+#    black_proportion(thresh1)
+    cv.destroyAllWindows()
+    # cv.imshow("thresh1", thresh1)
+    return cropped_image
+
+
+def crop_black_rate(image, r):
+    # Crop image
+    cropped_image = image[int(r[1]):int(r[1] + r[3]),
+                    int(r[0]):int(r[0] + r[2])]
+    # show crop imgage
+    cv.imshow('cut', cropped_image)
+
+    gray = cv.cvtColor(cropped_image, cv.COLOR_BGR2GRAY)
+    Gf = cv.medianBlur(gray, 3)
+    ret, thresh1 = cv.threshold(Gf, 135, 255, cv.THRESH_BINARY)
+    cv.imshow("二值化处理结果图像", thresh1)
+    black_proportion(thresh1)
+    cv.waitKey()
+    cv.destroyAllWindows()
+
+
 if __name__ == '__main__':
-    src = take_photo(0, 3)
-    #source = midian_blur("test.jpg")
-    target = midian_blur(src)
-    black_proportion(target)
+    #
+    src = cv.imread('m3pro.jpg')
+    target = cv.imread('bad.jpg')
+    h, w = src.shape[:2]
+    print(h, w)
+
+    # Select ROI
+    area = cv.selectROI("select the area", src)
+    crop_black_rate(src, area)
+    crop_black_rate(target, area)
     # ocr_detect('IMG_19700101_092822.jpg')
     #new_corner_detect('IMG_19700101_092822.jpg')
