@@ -120,14 +120,28 @@ def check_reboot_result(adb_address):
         print("Command Error", err)
         return False
 
-def take_photo(camera_id, device_id):
+
+def take_photo(camera_id, device_id, contour_area):
+    """
+    :contour_area  描框区域
+
+    """
     print(camera_id)
     cap = cv2.VideoCapture(int(camera_id))
     index = 1
     if cap.isOpened():
         ret, frame = cap.read()
         sleep(1)
-        cv2.imshow("USB", frame)
+        if contour_area is None:
+            area = cv2.selectROI("select the area", frame)
+            pt2 = ((area[0] + area[2]), (area[1] + area[3]))
+            cv2.rectangle(frame, (area[0], area[1]), pt2, (0, 255, 0), 2)
+            contour_area = area
+        else:
+            pt2 = ((contour_area[0] + contour_area[2]), (contour_area[1] + contour_area[3]))
+            cv2.rectangle(frame, (contour_area[0], contour_area[1]), pt2, (0, 255, 0), 2)
+        cv2.imshow("selected_img", frame)
+        # cv2.imshow("USB", frame)
         sleep(3)
         # 将这个文件pull到本地电脑上
         local_dir = str(device_id).replace(':', '_')
@@ -142,9 +156,51 @@ def take_photo(camera_id, device_id):
         print("save usb capture:" + str(index) + ".jpg successfuly!")
         cap.release()
         cv2.destroyAllWindows()
-        return export_img_path
+        return export_img_path, contour_area
     cap.release()
     cv2.destroyAllWindows()
+
+
+def crop_black_rate(image, r):
+    src = cv2.imread(image)
+    # Crop image
+    cropped_image = src[int(r[1]):int(r[1] + r[3]),
+                    int(r[0]):int(r[0] + r[2])]
+    # show crop imgage
+    cv2.imshow('cut', cropped_image)
+
+    gray = cv2.cvtColor(cropped_image, cv2.COLOR_BGR2GRAY)
+    Gf = cv2.medianBlur(gray, 3)
+    ret, thresh1 = cv2.threshold(Gf, 135, 255, cv2.THRESH_BINARY)
+    cv2.imshow("二值化处理结果图像", thresh1)
+    black_rate = black_proportion(thresh1)
+    cv2.waitKey()
+    cv2.destroyAllWindows()
+    return black_rate
+
+
+def black_proportion(thresh1):
+    """
+    :get the black proportion
+    """
+    x, y = thresh1.shape
+    bk = 0
+    wt = 0
+    # 遍历二值图，为0则bk+1，否则wt+1
+    for i in range(x):
+        for j in range(y):
+            if thresh1[i, j] == 0:
+                bk += 1
+            else:
+                wt += 1
+    rate1 = wt / (x * y)
+    rate2 = bk / (x * y)
+    # round()第二个值为保留几位有效小数。
+    print("白色占比:", round(rate1 * 100, 2), '%')
+    print("黑色占比:", round(rate2 * 100, 2), '%')
+    black_rate = round(rate2 * 100, 2)
+    cv2.destroyAllWindows()
+    return black_rate
 
 
 def clear_photos(adb_address):
@@ -181,6 +237,8 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.runBacktestPB.clicked.connect(self.run_test)
        # self.monitor_input.setText(self.detect_adb_devices())
+        self.monitor_input.setText('1')
+        self.test_id.setText('192.192.255.35:555')
         self.actionOpen.triggered.connect(self.open_setting)
         # 设置最小值
         self.rebootSlider.setMinimum(1)
@@ -234,7 +292,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.img_1.clear()
         self.img_2.clear()
         self.result.clear()
-        if len(self.monitor_input.text()) < 2:
+        if len(self.monitor_input.text()) < 1:
             QMessageBox.warning(self, '错误提示', '未输入测试设备信息')
             return
         self.log_label.clear()
@@ -293,7 +351,9 @@ class RebootThread(QThread):
     status_signal = pyqtSignal(str)
 
     def run(self):
-        sample_img = take_photo(self.monitor, self.test_device)
+        sample_img, crop_img = take_photo(self.monitor, self.test_device, None)
+        sample_black_rate = crop_black_rate(sample_img, crop_img)
+        print(sample_black_rate)
         cover_img = os.path.abspath(sample_img)
         if cover_img == ' ':
             return
@@ -309,7 +369,8 @@ class RebootThread(QThread):
                     sleep(2)  # wait till connected
                     loguru.logger.debug('sleep' + str(self.reboot_interval))
                     sleep(int(self.reboot_interval))  # wait till the device back to previous
-                    test_img = take_photo(self.monitor, self.test_device)
+                    test_img, crop_img = take_photo(self.monitor, self.test_device, crop_img)
+                    crop_black_rate(test_img, crop_img)
                     new_img = os.path.abspath(test_img)
                     dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1, 'device_exist': True}
                     loguru.logger.debug(str(dic))
@@ -329,7 +390,7 @@ class RebootThread(QThread):
                     tn.execute_command("reboot")
                     sleep(int(self.reboot_interval))  # wait till the device back to previous
                     loguru.logger.debug('device address:' + self.monitor)
-                    test_img = take_photo(self.monitor, self.test_device)
+                    test_img, crop_img = take_photo(self.monitor, self.test_device, crop_img)
                     new_img = os.path.abspath(test_img)
                     if new_img == ' ':
                         return
@@ -356,13 +417,18 @@ class RebootThread(QThread):
                     self.status_signal.emit(str(status))
                 loguru.logger.debug('sleep' + str(self.reboot_interval))
                 sleep(int(self.reboot_interval))  # wait till the device back to previous
-                test_img = take_photo(self.monitor, self.test_device)
+                test_img, crop_img = take_photo(self.monitor, self.test_device, crop_img)
+                target_black_rate = crop_black_rate(test_img, crop_img)
                 new_img = os.path.abspath(test_img)
                 dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1, 'device_exist': True}
                 loguru.logger.debug(str(dic))
                 self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
                 sleep(1)
-                flag = compare_two_pics(sample_img, test_img)
+                loguru.logger.info(sample_black_rate)
+                diff_rate = target_black_rate - sample_black_rate
+                if diff_rate >= 40:
+                    flag = True
+                # flag = compare_two_pics(sample_img, test_img)
                 # if the black screen occurs and the interrupt flag is true,  break the loop
                 if flag and self.int_flag:
                     self.black_screen_signal.emit(flag)

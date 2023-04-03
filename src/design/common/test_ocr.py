@@ -295,14 +295,21 @@ def crop_black_rate(image, r):
 
 if __name__ == '__main__':
     #
-    src = cv.imread('m3pro.jpg')
+    img = take_photo(1, '192.192.255.35')
+    src = cv.imread(img)
     target = cv.imread('bad.jpg')
     h, w = src.shape[:2]
     print(h, w)
-
     # Select ROI
     area = cv.selectROI("select the area", src)
+    pt2 = ((area[0] + area[2]), (area[1] + area[3]))
+    cv.rectangle(src, (area[0],area[1]), pt2, (0, 255, 0), 2)
+    cv.imshow("img", src)
+    cv.waitKey(0)
+    # cv.drawContours(src, area, -1, (0, 255, 0), 3)
     crop_black_rate(src, area)
     crop_black_rate(target, area)
+
+    # cv.destroyAllWindows()
     # ocr_detect('IMG_19700101_092822.jpg')
     #new_corner_detect('IMG_19700101_092822.jpg')
