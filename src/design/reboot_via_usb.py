@@ -2,6 +2,7 @@
 # __author__= gary
 import json
 import os
+import re
 import subprocess
 import sys
 import telnetlib
@@ -32,6 +33,18 @@ def run_cmd(command):
     except subprocess.CalledProcessError:
         loguru.logger.debug(subprocess.CalledProcessError)
         return '执行错误'
+
+
+def run_and_get_result(adb_address, command):
+    try:
+        para = 'adb -s ' + adb_address + ' shell ' + command
+        print(para)
+        output = subprocess.check_output(para, creationflags=0x08000000).decode().splitlines()
+        print(output)
+        return output
+    except subprocess.CalledProcessError as err:
+        print("Command Error", err)
+        return None
 
 
 def check_device_in_adb(device_id):
@@ -72,7 +85,7 @@ def adb_connect_device(adb_address):
     loguru.logger.debug(cmd)
     output = subprocess.check_output(cmd, creationflags=0x08000000).decode().splitlines()
     for i in output:
-        if i.find(adb_address)!=-1:
+        if i.find(adb_address) != -1:
             return True
         else:
             return False
@@ -181,7 +194,7 @@ def crop_black_rate(image, r):
 
 def black_proportion(thresh1):
     """
-    :get the black proportion
+    :get the black proportion of selected area
     """
     x, y = thresh1.shape
     bk = 0
@@ -234,10 +247,11 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super(RebootWindow, self).__init__(parent)
         self.reboot_thread = RebootThread()
+        self.log_thread = LogThread()
         self.setupUi(self)
         self.runBacktestPB.clicked.connect(self.run_test)
        # self.monitor_input.setText(self.detect_adb_devices())
-        self.monitor_input.setText('1')
+        self.monitor_input.setText('0')
         self.test_id.setText('192.192.255.35:555')
         self.actionOpen.triggered.connect(self.open_setting)
         # 设置最小值
@@ -253,7 +267,6 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.force_int_btn.clicked.connect(self.inte)
         self.force_reboot_flag = True
         self.sin1 = pyqtSignal(bool)
-
 
     def inte(self):
         self.force_reboot_flag = False
@@ -289,14 +302,17 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.reboot_time.setText('重启时间：' + str(value) + "s")
 
     def run_test(self):
+        self.log_thread.test_device = self.test_id.text()
         self.img_1.clear()
         self.img_2.clear()
         self.result.clear()
         if len(self.monitor_input.text()) < 1:
             QMessageBox.warning(self, '错误提示', '未输入测试设备信息')
             return
+        self.log_thread.start()
         self.log_label.clear()
         self.log_label.setText('开始测试')
+        self.log_thread.result_signal.connect(self.handle_log)
         self.reboot_thread.monitor = self.monitor_input.text()
         self.reboot_thread.test_device = self.test_id.text()
         self.reboot_thread.times = self.rebootSlider.value()
@@ -306,6 +322,11 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.reboot_thread.status_signal.connect(self.handle_status_update)  # update status
         self.reboot_thread.start()
         self.reboot_thread.int_flag = self.int_radio.isChecked()
+
+    def handle_log(self, str):
+        if str is None:
+            return
+        self.log_label.setText(str)
 
     def handle_test(self, dic):
         """
@@ -432,7 +453,21 @@ class RebootThread(QThread):
                 # if the black screen occurs and the interrupt flag is true,  break the loop
                 if flag and self.int_flag:
                     self.black_screen_signal.emit(flag)
-                    break
+                    return
+
+
+class LogThread(QThread):
+    result_signal = pyqtSignal(str)
+
+    def run(self):
+        flag = adb_connect_device(self.test_device)
+        if flag is not True:
+            self.result_signal.emit('can not connect to device')
+            return
+        result = run_and_get_result(self.test_device, 'cat /proc/cmdline')
+        serial_no = re.findall("no=(.+?) an", result[0])[0]
+        screen_id = str(re.findall("2 (.+?) and", result[0])[0]).strip()
+        self.result_signal.emit("device code:" + serial_no + "screen id: " + screen_id)
 
 
 class TelnetClient(object):
