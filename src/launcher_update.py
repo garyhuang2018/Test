@@ -39,6 +39,12 @@ class Ui_Form(object):
         self.progressBar.setGeometry(QtCore.QRect(30, 160, 361, 51))
         self.progressBar.setProperty("value", 0)
         self.progressBar.setObjectName("progressBar")
+        # existing code
+        self.startButton = QtWidgets.QPushButton(Form)
+        self.startButton.setGeometry(QtCore.QRect(310, 80, 75, 23))
+        self.startButton.setObjectName("startButton")
+        self.startButton.setText("Start")
+        self.startButton.clicked.connect(self.start_installation)
 
         for i in range(1, output.__len__() - 1):
             device = output[i].split('\t')[0]
@@ -68,6 +74,18 @@ class Ui_Form(object):
                 choice_1 = check.text()
                 self.devices.append(choice_1)
 
+    def start_installation(self):
+        apk_path = self.textEdit.toPlainText().replace('file:///', '').replace("/", "\\").replace('file:', '')
+        if apk_path.endswith(".apk"):
+            if self.devices:
+                for device in self.devices:
+                    cmd = f"adb -s {device} install -r -d {apk_path}"
+                    subprocess.Popen(cmd, shell=True)
+            else:
+                QMessageBox.about(self.message_widget, "提示", "未选择设备")
+        else:
+            QMessageBox.about(self.message_widget, "提示", "不支持安装该文件")
+        self.textEdit.clear()
 
 class MyWindow(QWidget, Ui_Form):
     def __init__(self):
@@ -104,24 +122,29 @@ def adb_connect():
 
 
 def shuaxin():
-    myWin.progressBar.setProperty("value", a[0])  # 这里执行发出信号后的内容
+    total = 100  # total progress percentage
+    progress = a[0]  # current progress percentage
+    value = int(progress / total * 100)  # calculate the value for the progressBar
+    myWin.progressBar.setValue(value)  # set the value of the progressBar
 
 
-def edit_change():
-    if 0 == myWin.textEdit.toPlainText().find('file:///') or 0 == myWin.textEdit.toPlainText().find('file://'):
-        _apk_path = myWin.textEdit.toPlainText().replace('file:///', '').replace("/", "\\").replace('file:', '')
-        myWin.textEdit.setText(myWin.textEdit.toPlainText().replace('file:///', '').replace("/", "\\"))
-        if _apk_path.find(".apk") >= 0:
-            if myWin.devices.__len__() > 0:
-                for device in myWin.devices:
-                    cmd = "adb -s " + device + " install -r -d " + _apk_path
-                    os.system(cmd)
-                QMessageBox.about(myWin.message_widget, "提示", "安装完成")
-            else:
-                QMessageBox.about(myWin.message_widget, "提示", "未选择设备")
-        else:
-            QMessageBox.about(myWin.message_widget, "提示", "不支持安装该文件")
-        myWin.textEdit.clear()
+# def edit_change():
+#     myWin.textEdit.setAcceptDrops(True)
+#     if 0 == myWin.textEdit.toPlainText().find('file:///') or 0 == myWin.textEdit.toPlainText().find('file://'):
+#         _apk_path = myWin.textEdit.toPlainText().replace('file:///', '').replace("/", "\\").replace('file:', '')
+#         myWin.textEdit.setText(myWin.textEdit.toPlainText().replace('file:///', '').replace("/", "\\"))
+#         if _apk_path.find(".apk") >= 0:
+#             if myWin.devices.__len__() > 0:
+#                 th.cmd = "adb -s " + myWin.devices[0] + " install -r -d " + _apk_path
+#                 print(th.cmd)
+#                 th.start()
+#                 th.trigger.connect(shuaxin)  # 这里监听信号
+#             else:
+#                 QMessageBox.about(myWin.message_widget, "提示", "未选择设备")
+#         else:
+#             QMessageBox.about(myWin.message_widget, "提示", "不支持安装该文件")
+#         myWin.textEdit.clear()
+#         myWin.textEdit.setAcceptDrops(True)
 
 
 if __name__ == '__main__':
@@ -132,6 +155,6 @@ if __name__ == '__main__':
     th = thread()
     th.run()
     myWin.pushButton.clicked.connect(adb_connect)
-    myWin.textEdit.textChanged.connect(edit_change)
+    # myWin.textEdit.textChanged.connect(edit_change)
     myWin.show()
     sys.exit(app.exec_())
