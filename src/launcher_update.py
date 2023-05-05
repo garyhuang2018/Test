@@ -72,20 +72,26 @@ class Ui_Form(object):
         for check in self.checkBoxes:
             if check.isChecked():
                 choice_1 = check.text()
-                self.devices.append(choice_1)
+                if choice_1 not in self.devices:
+                    self.devices.append(choice_1)
 
     def start_installation(self):
         apk_path = self.textEdit.toPlainText().replace('file:///', '').replace("/", "\\").replace('file:', '')
         if apk_path.endswith(".apk"):
             if self.devices:
-                for device in self.devices:
-                    cmd = f"adb -s {device} install -r -d {apk_path}"
-                    subprocess.Popen(cmd, shell=True)
+                th.devices = self.devices
+                th.apk_path = apk_path
+                th.start()
+                # for device in self.devices:
+                #     th.cmd = f"adb -s {device} install -r -d {apk_path}"
+                #     print(th.cmd)
+                #     th.start()
             else:
                 QMessageBox.about(self.message_widget, "提示", "未选择设备")
         else:
             QMessageBox.about(self.message_widget, "提示", "不支持安装该文件")
         self.textEdit.clear()
+
 
 class MyWindow(QWidget, Ui_Form):
     def __init__(self):
@@ -99,19 +105,25 @@ class thread(QThread):
     i = 0
 
     def run(self):
-        p = os.popen(self.cmd, "r")
-        progress = '0'
-        for i in range(1, 1000):
-            r = p.readline()
-            out_r = r[1: 4]
-            print(r)
-            if re.findall(r"\d+", out_r).__len__() > 0:
-                progress = re.findall(r"\d+", out_r)[0]
-            a[0] = eval(progress)
-            print(a[0])
-            if a[0] <= 100:
-                self.trigger.emit()  # 这里发出一个信号
-        p.close()
+        for device in self.devices:
+            cmd = f"adb -s {device} install -r -d {self.apk_path}"
+            print(cmd)
+            subprocess.call(cmd, shell=True)
+        # p = os.popen(self.cmd, "r")
+        # progress = '0'
+        # for i in range(1, 1000):
+        #     r = p.readline()
+        #     out_r = r[1: 4]
+        #     print(r)
+        #     if re.findall(r"\d+", out_r).__len__() > 0:
+        #         progress = re.findall(r"\d+", out_r)[0]
+        #     a[0] = eval(progress)
+        #     print(a[0])
+        #     if a[0] <= 100:
+        #         self.trigger.emit()  # 这里发出一个信号
+        #     if a[0] >= 100:
+        #         break
+        # p.close()
 
 
 def adb_connect():
@@ -153,7 +165,6 @@ if __name__ == '__main__':
     myWin.setWindowTitle("应用升级")
     timer = QTimer()
     th = thread()
-    th.run()
     myWin.pushButton.clicked.connect(adb_connect)
     # myWin.textEdit.textChanged.connect(edit_change)
     myWin.show()
