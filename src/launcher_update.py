@@ -5,7 +5,7 @@ import re
 import sys
 import subprocess
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QLabel, QCheckBox
+from PyQt5.QtWidgets import QLabel, QCheckBox, QFileDialog
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 from PyQt5.QtWidgets import QApplication, QWidget, QMessageBox
 
@@ -35,6 +35,7 @@ class Ui_Form(object):
         self.pushButton = QtWidgets.QPushButton(Form)
         self.pushButton.setGeometry(QtCore.QRect(310, 20, 75, 23))
         self.pushButton.setObjectName("pushButton")
+        # self.pushButton.clicked.connect(self.choose_file())
         self.progressBar = QtWidgets.QProgressBar(Form)
         self.progressBar.setGeometry(QtCore.QRect(30, 160, 361, 51))
         self.progressBar.setProperty("value", 0)
@@ -45,10 +46,11 @@ class Ui_Form(object):
         self.startButton.setObjectName("startButton")
         self.startButton.setText("Start")
         self.startButton.clicked.connect(self.start_installation)
+        self.pushButton.clicked.connect(self.choose_file)
 
         for i in range(1, output.__len__() - 1):
             device = output[i].split('\t')[0]
-            title = QLabel('将应用文件拖入输入框，勾选下列设备升级:', Form)
+            title = QLabel('将应用文件拖入上面的输入框，勾选下列设备升级:', Form)
             title.setGeometry(QtCore.QRect(20, 75, 275, 28))
             content = QLabel(Form)
             check_1 = QCheckBox(device, Form)
@@ -59,14 +61,27 @@ class Ui_Form(object):
             title = QLabel('请先连接设备', Form)
             title.setGeometry(QtCore.QRect(20, 45, 275, 28))
             content = QLabel(Form)
-
         self.retranslateUi(Form)
         QtCore.QMetaObject.connectSlotsByName(Form)
+
+    def choose_file(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.DontUseNativeDialog
+        fileName, _ = QFileDialog.getOpenFileName(None, "Open IP File", "", "Text Files (*.txt)", options=options)
+        if fileName:
+            with open(fileName, "r") as f:
+                for line in f:
+                    ip_address = line.strip()
+                    if ip_address:
+                        # Run ADB command to connect to the IP address
+                        command = "adb connect {}".format(ip_address) + ":555"
+                        subprocess.call(command, shell=True)
+                self.deviceEdit.setText("Finished connecting to all IP addresses")
 
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "Form"))
-        self.pushButton.setText(_translate("Form", "连接"))
+        self.pushButton.setText(_translate("Form", "打开文件"))
 
     def choose(self):
         for check in self.checkBoxes:
@@ -126,11 +141,11 @@ class thread(QThread):
         # p.close()
 
 
-def adb_connect():
-    cmd = myWin.deviceEdit.toPlainText()
-    print(cmd)
-    os.system('adb connect ' + cmd)
-    os.system('adb connect ' + cmd + ':555')
+# def adb_connect():
+#     cmd = myWin.deviceEdit.toPlainText()
+#     print(cmd)
+#     os.system('adb connect ' + cmd)
+#     os.system('adb connect ' + cmd + ':555')
 
 
 def shuaxin():
@@ -160,12 +175,11 @@ def shuaxin():
 
 
 if __name__ == '__main__':
+    th = thread()
     app = QApplication(sys.argv)
     myWin = MyWindow()
     myWin.setWindowTitle("应用升级")
     timer = QTimer()
-    th = thread()
-    myWin.pushButton.clicked.connect(adb_connect)
     # myWin.textEdit.textChanged.connect(edit_change)
     myWin.show()
     sys.exit(app.exec_())
