@@ -31,15 +31,21 @@ class Ui_Form(object):
         self.textEdit.setObjectName("textEdit")
         self.textEdit.setToolTip("将应用文件拖入后升级")
         self.textEdit.setReadOnly(False)
-        output = subprocess.check_output("adb devices").decode().splitlines()
+        self.output = subprocess.check_output("adb devices").decode().splitlines()
         self.pushButton = QtWidgets.QPushButton(Form)
         self.pushButton.setGeometry(QtCore.QRect(310, 20, 75, 23))
         self.pushButton.setObjectName("pushButton")
+         # Add a 'Select All' button
+        self.selectAllButton = QtWidgets.QPushButton(Form)
+        self.selectAllButton.setObjectName("selectAllButton")
+        self.selectAllButton.setGeometry(QtCore.QRect(20, 95, 75, 23))
+        self.selectAllButton.setText("Select All")
+        self.selectAllButton.clicked.connect(self.toggleCheckboxes)
         # self.pushButton.clicked.connect(self.choose_file())
-        self.progressBar = QtWidgets.QProgressBar(Form)
-        self.progressBar.setGeometry(QtCore.QRect(30, 160, 361, 51))
-        self.progressBar.setProperty("value", 0)
-        self.progressBar.setObjectName("progressBar")
+        # self.progressBar = QtWidgets.QProgressBar(Form)
+        # self.progressBar.setGeometry(QtCore.QRect(30, 160, 361, 51))
+        # self.progressBar.setProperty("value", 0)
+        # self.progressBar.setObjectName("progressBar")
         # existing code
         self.startButton = QtWidgets.QPushButton(Form)
         self.startButton.setGeometry(QtCore.QRect(310, 80, 75, 23))
@@ -47,22 +53,29 @@ class Ui_Form(object):
         self.startButton.setText("Start")
         self.startButton.clicked.connect(self.start_installation)
         self.pushButton.clicked.connect(self.choose_file)
+        self.initCheckBox(Form)
+        self.retranslateUi(Form)
+        QtCore.QMetaObject.connectSlotsByName(Form)
 
-        for i in range(1, output.__len__() - 1):
-            device = output[i].split('\t')[0]
+    def toggleCheckboxes(self):
+        # Toggle the state of all of the checkboxes
+        for checkbox in self.checkBoxes:
+            checkbox.setChecked(True)
+
+    def initCheckBox(self, Form):
+        for i in range(1, self.output.__len__() - 1):
+            device = self.output[i].split('\t')[0]
             title = QLabel('将应用文件拖入上面的输入框，勾选下列设备升级:', Form)
             title.setGeometry(QtCore.QRect(20, 75, 275, 28))
             content = QLabel(Form)
             check_1 = QCheckBox(device, Form)
-            check_1.move(20, 85 + (i * 20))
+            check_1.move(20, 105 + (i * 20))
             check_1.stateChanged.connect(self.choose)
             self.checkBoxes.append(check_1)
         if self.checkBoxes.__len__() <= 0:
             title = QLabel('请先连接设备', Form)
             title.setGeometry(QtCore.QRect(20, 45, 275, 28))
             content = QLabel(Form)
-        self.retranslateUi(Form)
-        QtCore.QMetaObject.connectSlotsByName(Form)
 
     def choose_file(self):
         options = QFileDialog.Options()
@@ -77,6 +90,8 @@ class Ui_Form(object):
                         command = "adb connect {}".format(ip_address) + ":555"
                         subprocess.call(command, shell=True)
                 self.deviceEdit.setText("Finished connecting to all IP addresses")
+                self.output = subprocess.check_output("adb devices").decode().splitlines()
+                self.initCheckBox(self)  # Call initCheckBox to update the checkboxes list
 
     def retranslateUi(self, Form):
         _translate = QtCore.QCoreApplication.translate
