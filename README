@@ -4,3 +4,6 @@ PYQT test tool | 自动化测试工具
 
 # reboot_test_window 
 存储位置在，design, reboot_test_window为自动化黑屏测试工具
+
+# audio_test.py  
+用于对讲音频测试的测试工具
