@@ -1,10 +1,13 @@
 # encoding= utf-8
 # __author__= gary
 # import logging
+import matplotlib.pyplot as plt
 import os
+from PyQt5 import QtGui
 import subprocess
 from time import sleep
-
+import sounddevice as sd
+import soundfile as sf
 import requests
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -25,10 +28,22 @@ def adb_connect( ip, port):
     # logger.info('adb connected ')
 
 
+class AudioThread(QThread):
+    # def __init__(self, parent=None):
+    #     super(AudioThread, self).__init__(parent)
+
+    def run(self):
+        if self.record_flag is not True:
+            play_audio()
+        else:
+            get_audio()
+
+
 class MyWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super(MyWindow, self).__init__(parent)
         self.reboot_thread = RebootThread()
+        self.audio_thread = AudioThread()
         self.setupUi(self)
         self.ip_address_input.setText("192.192.255.138")
         self.port_input.setText('5555')
@@ -43,11 +58,21 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.my_thread.signal.connect(self.callback)  # 设置任务线程发射信号触发的函数
         self.my_thread.screenshot_signal.connect(self.handle_screenshot)
         self.local_voice_button.clicked.connect(self.voice_record)
+        self.label_6.setText('audio')
+        self.play_audio.clicked.connect(self.start_audio_thread)
         #self.screenshot_button.clicked.connect(self.screenshot)
         #self.reboot_button.clicked.connect(self.reboot_test)
 
+    def start_audio_thread(self):
+        self.audio_thread.record_flag = False
+        self.audio_thread.start()
+
     def audio_log(self, info):
         self.log_text.append(info)
+        if 'answer' in info:
+            self.audio_thread.record_flag = True
+            self.audio_thread.start()
+            QMessageBox.about(self, "录音成功", '点击打开录音图或者播放音频')
 
     def reboot_test(self):
         """
@@ -70,12 +95,20 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.log_text.append(info)
 
     def voice_record(self):
-        adb_connect(self.ip_address_input.text(), '')
-        os.system('adb shell am start com.android.soundrecorder')
-        child1 = subprocess.Popen(["adb", "logcat"], stdout=subprocess.PIPE)
-        child2 = subprocess.Popen(["grep", "received MCU"], stdin=child1.stdout, stdout=subprocess.PIPE)
-        out = child2.communicate()
-        print(out)
+        # get_audio()
+        # sleep(11)
+        data, samplerate = sf.read('my_Audio.wav')
+        plt.plot(data)
+        plt.savefig('image.png')
+        image = QtGui.QPixmap('image.png').scaled(590, 390)
+        self.label_6.setPixmap(image)
+        # play_audio()
+        # adb_connect(self.ip_address_input.text(), '')
+        # os.system('adb shell am start com.android.soundrecorder')
+        # child1 = subprocess.Popen(["adb", "logcat"], stdout=subprocess.PIPE)
+        # child2 = subprocess.Popen(["grep", "received MCU"], stdin=child1.stdout, stdout=subprocess.PIPE)
+        # out = child2.communicate()
+        # print(out)
 
     def start_call_thread(self):
         """
@@ -159,12 +192,17 @@ class LogThread(QThread):
         
     def run(self):
         print(self.outdoor_address)
+        subprocess.Popen(['adb', '-s', self.outdoor_address, 'logcat', '-c'], stdout=subprocess.PIPE)
         result = subprocess.Popen(['adb', '-s', self.outdoor_address, 'logcat'], stdout=subprocess.PIPE)
         for line in iter(result.stdout.readline, b''):
+            if b'ringing' in line:
+                self.signal.emit(f"Device {self.outdoor_address}: {line.decode().strip()}")
             if b'devModel' in line:
                 self.signal.emit(f"Device {self.outdoor_address}: {line.decode().strip()}")
             if b'PlaybackGain' in line:
                 print(f"Device {self.outdoor_address}: {line.decode().strip()}")
+                self.signal.emit(f"Device {self.outdoor_address}: {line.decode().strip()}")
+            if b'answer' in line:
                 self.signal.emit(f"Device {self.outdoor_address}: {line.decode().strip()}")
         # os.system('adb connect {}:{}'.format(ip_address, port))
         # os.system('adb logcat -c')
@@ -278,6 +316,24 @@ class MyThread(QThread):
 #     def emit(self, record):
 #         msg = self.format(record)
 #         self.widget.appendPlainText(msg)
+def get_audio():
+    fs = 44100  # Sample rate
+    seconds = 10  # Duration of recording
+    myrecording = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
+    sd.wait()  # Wait until recording is finished
+    sf.write('my_Audio.wav', myrecording, fs)
+
+
+def play_audio():
+    # Replace 'path/to/audio/file.wav' with the actual path to your audio file
+    audio_file = 'my_Audio.wav'
+    # Load the audio file
+    import librosa
+    audio_data, sample_rate = librosa.load(audio_file, sr=None, mono=True)
+    # Play the audio
+    sd.play(audio_data, sample_rate)
+    # Wait for the audio to finish playing
+    sd.wait()
 
 
 if __name__ == '__main__':
@@ -286,3 +342,7 @@ if __name__ == '__main__':
     w = MyWindow()
     w.show()
     sys.exit(app.exec_())
+
+    # def wait_and_record(self):
+    #     sleep(11)
+    #     get_audio()
