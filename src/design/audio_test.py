@@ -8,12 +8,10 @@ import subprocess
 from time import sleep
 import sounddevice as sd
 import soundfile as sf
-import requests
-from PyQt5 import QtWidgets
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QMainWindow, QMessageBox
-from ui.audioTest import Ui_MainWindow
+from design.ui.audioTest import Ui_MainWindow
 import sys
 # from loguru import logger
 # import uiautomator2 as u2
@@ -38,6 +36,11 @@ class AudioThread(QThread):
         else:
             get_audio()
 
+    def play_test_audio(self, filename):
+        data, samplerate = sf.read(filename)
+        sd.play(data, samplerate)
+        sd.wait()
+
 
 class MyWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
@@ -60,6 +63,7 @@ class MyWindow(QMainWindow, Ui_MainWindow):
         self.local_voice_button.clicked.connect(self.voice_record)
         self.label_6.setText('audio')
         self.play_audio.clicked.connect(self.start_audio_thread)
+        self.audio_started = False
         #self.screenshot_button.clicked.connect(self.screenshot)
         #self.reboot_button.clicked.connect(self.reboot_test)
 
@@ -69,7 +73,9 @@ class MyWindow(QMainWindow, Ui_MainWindow):
 
     def audio_log(self, info):
         self.log_text.append(info)
-        if 'answer' in info:
+        if 'state: StreamsRunning' in info and not self.audio_started:
+            # play_test_audio('test_01.mp3')
+            self.audio_started = True
             self.audio_thread.record_flag = True
             self.audio_thread.start()
             QMessageBox.about(self, "录音成功", '点击打开录音图或者播放音频')
@@ -202,7 +208,7 @@ class LogThread(QThread):
             if b'PlaybackGain' in line:
                 print(f"Device {self.outdoor_address}: {line.decode().strip()}")
                 self.signal.emit(f"Device {self.outdoor_address}: {line.decode().strip()}")
-            if b'answer' in line:
+            if b'state: StreamsRunning' in line:
                 self.signal.emit(f"Device {self.outdoor_address}: {line.decode().strip()}")
         # os.system('adb connect {}:{}'.format(ip_address, port))
         # os.system('adb logcat -c')
@@ -322,6 +328,15 @@ def get_audio():
     myrecording = sd.rec(int(seconds * fs), samplerate=fs, channels=2)
     sd.wait()  # Wait until recording is finished
     sf.write('my_Audio.wav', myrecording, fs)
+
+
+def play_test_audio(file_path):
+    # Load the audio file
+    audio_data, sample_rate = librosa.load(file_path, sr=None, mono=True)
+    # Play the audio
+    sd.play(audio_data, sample_rate)
+    # Wait for the audio to finish playing
+    sd.wait()
 
 
 def play_audio():
