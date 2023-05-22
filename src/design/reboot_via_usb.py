@@ -18,7 +18,7 @@ from PyQt5.QtCore import QThread, pyqtSignal, QDir
 from PyQt5.QtWidgets import QMainWindow, QApplication, QSlider, QMessageBox, QFileDialog
 
 
-from ui.mainScreen import Ui_MainWindow
+from design.ui.mainScreen import Ui_MainWindow
 
 loguru.logger.add("file_{time}.log")
 
@@ -264,7 +264,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         self.rebootSlider.valueChanged[int].connect(self.changevalue)
         self.timeSlider.valueChanged[int].connect(self.changetime)
         self.img_path_btn.clicked.connect(self.open_img_path)
-        self.force_int_btn.clicked.connect(self.inte)
+        # self.force_int_btn.clicked.connect(self.inte)
         self.force_reboot_flag = True
         self.sin1 = pyqtSignal(bool)
 
@@ -407,6 +407,7 @@ class RebootThread(QThread):
                 print('go to telnet reboot process')
                 tn = TelnetClient(ip=self.test_device, username="root", password="gemvary")
                 for i in range(0, self.times):
+                    print(str(f"{i}")+"time: reboot")
                     tn.login()
                     tn.execute_command("reboot")
                     sleep(int(self.reboot_interval))  # wait till the device back to previous
@@ -418,15 +419,25 @@ class RebootThread(QThread):
                     dic = {'label_name': 'img_2', 'img': new_img, 'times': i + 1,'device_exist': True}
                     self.signal.emit(dic)  # 用数值判断，<-1作为第一张样板图片
                     loguru.logger.debug(str(f"{i}")+"time reboot")
-                    sleep(1)
-                    flag = compare_two_pics(sample_img, test_img)
-                    # if the black screen occurs, break the loop
-                    self.black_screen_signal.emit(flag)
-                    if flag is True and self.int_flag is True:
-                        break
+                    loguru.logger.info(sample_black_rate)
+                    target_black_rate = crop_black_rate(test_img, crop_img)
+                    diff_rate = target_black_rate - sample_black_rate
+                    if diff_rate >= 40:
+                        flag = True
+                    # flag = compare_two_pics(sample_img, test_img)
+                    # if the black screen occurs and the interrupt flag is true,  break the loop
+                    if flag and self.int_flag:
+                        self.black_screen_signal.emit(flag)
+                        return
+                    # sleep(1)
+                    # flag = compare_two_pics(sample_img, test_img)
+                    # print('telnet flag', flag)
+                    # # if the black screen occurs, break the loop
+                    # self.black_screen_signal.emit(flag)
+                    # # if flag is True and self.int_flag is True:
+                    # #     break
         else:
             for i in range(0, self.times):
-                loguru.logger.debug(str(f"{i}")+"time reboot")
                 adb_connect_device(self.test_device)
                 sleep(2)  # wait till connected
                 if check_reboot_result(self.test_device) is not True:
@@ -460,11 +471,12 @@ class LogThread(QThread):
     result_signal = pyqtSignal(str)
 
     def run(self):
-        flag = adb_connect_device(self.test_device)
-        if flag is not True:
+        adb_connect_device(self.test_device)
+        if detect_adb_devices() is not True:
             self.result_signal.emit('can not connect to device')
             return
         result = run_and_get_result(self.test_device, 'cat /proc/cmdline')
+
         serial_no = re.findall("no=(.+?) an", result[0])[0]
         screen_id = str(re.findall("2 (.+?) and", result[0])[0]).strip()
         self.result_signal.emit("device code:" + serial_no + "screen id: " + screen_id)
