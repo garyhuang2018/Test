@@ -257,7 +257,7 @@ class RebootWindow(QMainWindow, Ui_MainWindow):
         # 设置最小值
         self.rebootSlider.setMinimum(1)
         # 设置最大值
-        self.rebootSlider.setMaximum(300)
+        self.rebootSlider.setMaximum(1000)
         self.timeSlider.setMinimum(12)
         self.timeSlider.setMaximum(150)
         self.rebootSlider.setTickPosition(QSlider.TicksRight)
@@ -429,13 +429,6 @@ class RebootThread(QThread):
                     if flag and self.int_flag:
                         self.black_screen_signal.emit(flag)
                         return
-                    # sleep(1)
-                    # flag = compare_two_pics(sample_img, test_img)
-                    # print('telnet flag', flag)
-                    # # if the black screen occurs, break the loop
-                    # self.black_screen_signal.emit(flag)
-                    # # if flag is True and self.int_flag is True:
-                    # #     break
         else:
             for i in range(0, self.times):
                 adb_connect_device(self.test_device)
