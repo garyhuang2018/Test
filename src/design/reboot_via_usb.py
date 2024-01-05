@@ -109,7 +109,7 @@ def check_device_platform(adb_address):
         else:
             loguru.logger.debug('can not connect to', adb_address)
             sleep(i * 10)
-            adb_connect_device(adb_address)
+            # adb_connect_device(adb_address)
             if i == 3:
                 break
 
@@ -386,8 +386,10 @@ class RebootThread(QThread):
                 print('adb usb connect')
                 for i in range(0, self.times):
                     loguru.logger.debug(str(f"{i}") + "time reboot")
-                    adb_connect_device(self.test_device)
+                    # adb_connect_device(self.test_device)
                     sleep(2)  # wait till connected
+                    cmd = 'adb reboot'
+                    run_cmd(cmd)
                     loguru.logger.debug('sleep' + str(self.reboot_interval))
                     sleep(int(self.reboot_interval))  # wait till the device back to previous
                     test_img, crop_img = take_photo(self.monitor, self.test_device, crop_img)
@@ -431,7 +433,7 @@ class RebootThread(QThread):
                         return
         else:
             for i in range(0, self.times):
-                adb_connect_device(self.test_device)
+                # adb_connect_device(self.test_device)
                 sleep(2)  # wait till connected
                 if check_reboot_result(self.test_device) is not True:
                     status = '无法重启'
@@ -464,7 +466,7 @@ class LogThread(QThread):
     result_signal = pyqtSignal(str)
 
     def run(self):
-        adb_connect_device(self.test_device)
+        # adb_connect_device(self.test_device)
         if detect_adb_devices() is not True:
             self.result_signal.emit('can not connect to device')
             return
