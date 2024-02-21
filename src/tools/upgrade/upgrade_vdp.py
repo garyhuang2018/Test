@@ -1,5 +1,5 @@
 # encoding= utf-8
-#__author__= gary
+# __author__= gary
 import datetime
 from time import sleep
 
@@ -48,6 +48,8 @@ class UpgradeVdp:
             sleep(upload_time)
 
     def upgrade(self):
+        # 切换到智能物联菜单
+        self.browser.find_element_by_xpath("//li[text()=' 智能物联 ']").click()
         # 切换升级文件管理
         self.browser.find_element_by_xpath("//span[text()=' 升级信息配置 ']").click()
         sleep(2)
@@ -71,18 +73,21 @@ class UpgradeVdp:
 
         # 设置开始时间
         self.browser.find_element_by_xpath(
-            "//*[@id='app']/div/div[2]/main/div[2]/div/div[2]/form/div[1]/div[2]/div[5]/div/div/div[1]/div/div/div/input").send_keys(now_day)
+            "/html/body/div[1]/div/div[2]/main/div[2]/div/div[2]/form/div[1]/div[2]/div[5]/div/div/input[1]").send_keys(now_day)
         # 点击确定
-        self.browser.find_element_by_xpath("/html/body/div[3]/div[2]/button[2]").click()
+        # self.browser.find_element_by_xpath("/html/body/div[3]/div[2]/button[2]").click()
         sleep(2)
 
         # 设置结束时间
         self.browser.find_element_by_xpath(
-            "//*[@id='app']/div/div[2]/main/div[2]/div/div[2]/form/div[1]/div[2]/div[5]/div/div/div[3]/div/div/div/input").send_keys(after_day)
-        self.browser.find_element_by_xpath("/html/body/div[4]/div[2]/button[2]").click()
+            "/html/body/div[1]/div/div[2]/main/div[2]/div/div[2]/form/div[1]/div[2]/div[5]/div/div/input[2]").send_keys(after_day)
+        # sleep(1)
+        # self.browser.find_element_by_xpath("/html/body/div[4]/div[2]/button[2]").click()
         sleep(2)
 
         # 点击保存
+        self.browser.find_element_by_xpath(
+            "//*[@id='app']/div/div[2]/main/div[2]/div/div[2]/form/div[2]/div/button").click()
         self.browser.find_element_by_xpath(
             "//*[@id='app']/div/div[2]/main/div[2]/div/div[2]/form/div[2]/div/button").click()
         sleep(5)
@@ -93,7 +98,7 @@ if __name__ == '__main__':
     browser = webdriver.Firefox()
 
     # 打开目标网站
-    url = 'http://192.192.10.10:8080/'  # 替换为实际的上传页面 URL
+    url = 'http://192.192.99.101:8080/'  # 替换为实际的上传页面 URL
     browser.get(url)
     upgradeVdp = UpgradeVdp(browser,'15211222211','888888', r"D:\6_测试工具\本地OTA\ota_rk3288_outdoor-P3_20240118.zip")
     upgradeVdp.login()
