@@ -1,5 +1,4 @@
 
-
 import sys
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QLabel, QVBoxLayout, QWidget
 import pandas as pd
@@ -23,15 +22,15 @@ class ExcelFileReader(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('Excel File Reader')
+        self.setWindowTitle('BOM位号检查器')
         self.setGeometry(100, 100, 600, 400)
 
         layout = QVBoxLayout()
 
-        self.label = QLabel('Select an Excel file to read', self)
+        self.label = QLabel('选择一个BOM的Excel文件', self)
         layout.addWidget(self.label)
 
-        self.button = QPushButton('Browse', self)
+        self.button = QPushButton('打开', self)
         self.button.clicked.connect(self.showFileDialog)
         layout.addWidget(self.button)
 
@@ -52,7 +51,7 @@ class ExcelFileReader(QMainWindow):
         try:
             # df = pd.read_excel(file_name)
             # Load the Excel file
-            df = pd.read_excel(file_name, engine='openpyxl')
+            df = pd.read_excel(file_name, engine='openpyxl', skiprows=1)
             self.label.setText(f"Excel file loaded:\n{file_name}\n\nData Preview:\n{df.head()}")
 
             # Print out the column names to see what pandas is recognizing
@@ -81,19 +80,19 @@ class ExcelFileReader(QMainWindow):
                 unique_tags = set(filtered_tags)  # Use a set to remove duplicates
                 return len(unique_tags)
 
-            df['Computed Tag Count'] = df['新位号或备注'].apply(count_unique_tags)
+            df['统计位号数量'] = df['新位号或备注'].apply(count_unique_tags)
 
             # Manually explode the tags for older pandas versions
             all_tags = df['新位号或备注'].dropna().apply(lambda x: pd.Series(x.split(','))).stack().reset_index(drop=True)
             all_tags = all_tags[all_tags.str.strip() != '']
             tag_counts = all_tags.value_counts()
 
-            df['Is Duplicate'] = df['新位号或备注'].apply(
+            df['位号重复'] = df['新位号或备注'].apply(
                 lambda x: any(tag_counts[tag.strip()] > 1 for tag in x.split(',') if tag.strip()) if isinstance(x,
                                                                                                                 str) else False)
 
             # Compare computed tag counts with column '数量'
-            df['Mismatch'] = df['Computed Tag Count'] != df['数量']
+            df['位号数量不匹配'] = df['统计位号数量'] != df['数量']
 
             # Save the modified DataFrame back to Excel using xlsxwriter
             writer = pd.ExcelWriter(file_name, engine='xlsxwriter')
@@ -111,8 +110,11 @@ class ExcelFileReader(QMainWindow):
             e_col_letter = excel_col(df.columns.get_loc('组件编码'))
             worksheet.set_column(f'{e_col_letter}:{e_col_letter}', None, format_num)
 
-            # Determine the Excel column letter for 'Mismatch'
-            mismatch_col = excel_col(df.columns.get_loc('Mismatch'))
+            # Determine the Excel column letter for '位号数量不匹配'
+            mismatch_col = excel_col(df.columns.get_loc('位号数量不匹配'))
+
+            # Determine the Excel column letter for '位号重复'
+            duplicate_col = excel_col(df.columns.get_loc('位号重复'))
 
             # Apply the format to the mismatched cells
             worksheet.conditional_format(f'{mismatch_col}1:{mismatch_col}{len(df) + 1}', {
@@ -122,6 +124,15 @@ class ExcelFileReader(QMainWindow):
                 'format': format_red
             })
 
+            # Apply the format to the duplicated cells
+            worksheet.conditional_format(f'{duplicate_col}1:{duplicate_col}{len(df) + 1}', {
+                'type': 'cell',
+                'criteria': '==',
+                'value': 'TRUE',
+                'format': format_red
+            })
+
+            self.label.setText(f"不匹配行:\n{mismatch_col}\n\n重复行:\n{duplicate_col}")
             writer.save()
             print("Updated Excel file with tag counts and duplicate status, mismatches highlighted.")
         except Exception as e:
