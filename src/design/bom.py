@@ -1,6 +1,7 @@
 
 import sys
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QLabel, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QFileDialog, QLabel, QVBoxLayout, QWidget, \
+    QInputDialog
 import pandas as pd
 
 
@@ -49,25 +50,43 @@ class ExcelFileReader(QMainWindow):
 
     def readExcelFile(self, file_name):
         try:
-            # df = pd.read_excel(file_name)
-            # Load the Excel file
-            df = pd.read_excel(file_name, engine='openpyxl', skiprows=1)
+
+            # Ask user if they want to skip the first row
+            skip_first_row, ok = QInputDialog.getItem(self, "判断列名所在行", "是否跳过Excel表第一行?",
+                                                      ["Yes", "No"], 0, False)
+            if not ok:
+                self.label.setText("Operation cancelled.")
+                return
+
+            skip_rows = 1 if skip_first_row == "Yes" else None
+
+            # Load the Excel file with or without skipping the first row
+            df = pd.read_excel(file_name, engine='openpyxl', skiprows=skip_rows)
             self.label.setText(f"Excel file loaded:\n{file_name}\n\nData Preview:\n{df.head()}")
 
-            # Print out the column names to see what pandas is recognizing
-            print("Column names in the Excel file:", df.columns.tolist())
+            # Check if the specific header exists
+            if '新位号或备注' not in df.columns:
+                # Prompt user to input the correct column name
+                column_name, ok = QInputDialog.getText(self, 'Input Column Name', '输入位号所在列名:')
+                if ok and column_name:
+                    column_name = column_name.strip()
+                else:
+                    self.label.setText("Operation cancelled or invalid column name.")
+                    return
+            else:
+                column_name = '新位号或备注'
 
-            # Ensure the specific header exists
-            if '新位号或备注' not in df.columns or '数量' not in df.columns:
-                print("Required columns do not exist in the Excel file.")
+            # Continue with the rest of the code using the user-provided or default column name
+            if column_name not in df.columns:
+                self.label.setText("The specified column does not exist in the Excel file.")
                 return
 
             # Print out the content of the column
-            print("Contents of '新位号或备注':")
-            print(df['新位号或备注'])
+            print(f"Contents of '{column_name}':")
+            print(df[column_name])
 
             # Check for empty rows and print their indices
-            empty_rows = df['新位号或备注'].isna()
+            empty_rows = df[column_name].isna()
             if empty_rows.any():
                 print("Empty rows at indices:", empty_rows[empty_rows].index.tolist())
 
@@ -80,14 +99,14 @@ class ExcelFileReader(QMainWindow):
                 unique_tags = set(filtered_tags)  # Use a set to remove duplicates
                 return len(unique_tags)
 
-            df['统计位号数量'] = df['新位号或备注'].apply(count_unique_tags)
+            df['统计位号数量'] = df[column_name].apply(count_unique_tags)
 
             # Manually explode the tags for older pandas versions
-            all_tags = df['新位号或备注'].dropna().apply(lambda x: pd.Series(x.split(','))).stack().reset_index(drop=True)
+            all_tags = df[column_name].dropna().apply(lambda x: pd.Series(x.split(','))).stack().reset_index(drop=True)
             all_tags = all_tags[all_tags.str.strip() != '']
             tag_counts = all_tags.value_counts()
 
-            df['位号重复'] = df['新位号或备注'].apply(
+            df['位号重复'] = df[column_name].apply(
                 lambda x: any(tag_counts[tag.strip()] > 1 for tag in x.split(',') if tag.strip()) if isinstance(x,
                                                                                                                 str) else False)
 
@@ -132,7 +151,7 @@ class ExcelFileReader(QMainWindow):
                 'format': format_red
             })
 
-            self.label.setText(f"不匹配行:\n{mismatch_col}\n\n重复行:\n{duplicate_col}")
+            self.label.setText(f"重复位号或数量不匹配的已在excel表中标红，请在excel表中检查")
             writer.save()
             print("Updated Excel file with tag counts and duplicate status, mismatches highlighted.")
         except Exception as e:
