@@ -3,7 +3,9 @@
 
 import sys
 import pandas as pd
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLineEdit, QPushButton, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QCheckBox
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment
 
 
 class TextToExcelApp(QWidget):
@@ -12,21 +14,34 @@ class TextToExcelApp(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('Text to Excel')
+        self.setWindowTitle('一页纸调试模板')
 
         # Layout
         layout = QVBoxLayout()
 
         # Label
-        self.label = QLabel('Please enter the text:')
+        self.label = QLabel('输入酒店名称:')
         layout.addWidget(self.label)
+
+        # Text input and checkboxes layout
+        input_layout = QHBoxLayout()
 
         # Text input
         self.text_input = QLineEdit(self)
-        layout.addWidget(self.text_input)
+        input_layout.addWidget(self.text_input)
+
+        # Checkboxes
+        self.checkbox1 = QCheckBox('展箱', self)
+        self.checkbox2 = QCheckBox('样板间', self)
+        self.checkbox3 = QCheckBox('批量', self)
+        input_layout.addWidget(self.checkbox1)
+        input_layout.addWidget(self.checkbox2)
+        input_layout.addWidget(self.checkbox3)
+
+        layout.addLayout(input_layout)
 
         # Button
-        self.button = QPushButton('Save to Excel', self)
+        self.button = QPushButton('保存到Excel', self)
         self.button.clicked.connect(self.save_to_excel)
         layout.addWidget(self.button)
 
@@ -36,8 +51,33 @@ class TextToExcelApp(QWidget):
 
     def save_to_excel(self):
         user_input = self.text_input.text()
+        checked_options = []
+
+        if self.checkbox1.isChecked():
+            checked_options.append(self.checkbox1.text())
+        if self.checkbox2.isChecked():
+            checked_options.append(self.checkbox2.text())
+        if self.checkbox3.isChecked():
+            checked_options.append(self.checkbox3.text())
+
         df = pd.DataFrame([user_input], columns=["UserInput"])
+        df['CheckedOptions'] = ', '.join(checked_options)
         df.to_excel("output.xlsx", index=False)
+
+        # Load the workbook and select the active worksheet
+        wb = load_workbook("output.xlsx")
+        ws = wb.active
+
+        # Merge cells A1 to D1
+        ws.merge_cells('A1:D1')
+
+        # Set the value and alignment for the merged cell
+        ws['A1'] = user_input
+        ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+
+        # Save the workbook
+        wb.save("output.xlsx")
+
         self.label.setText('Text saved to output.xlsx')
 
 
