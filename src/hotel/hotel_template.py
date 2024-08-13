@@ -3,7 +3,7 @@
 
 import sys
 import pandas as pd
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QCheckBox
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QLabel, QCheckBox, QComboBox
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment
 
@@ -12,6 +12,7 @@ class TextToExcelApp(QWidget):
     def __init__(self):
         super().__init__()
         self.initUI()
+        self.load_product_models()
 
     def initUI(self):
         self.setWindowTitle('一页纸调试模板')
@@ -40,6 +41,10 @@ class TextToExcelApp(QWidget):
 
         layout.addLayout(input_layout)
 
+        # Product model dropdown
+        self.product_model_dropdown = QComboBox(self)
+        layout.addWidget(self.product_model_dropdown)
+
         # Button
         self.button = QPushButton('保存到Excel', self)
         self.button.clicked.connect(self.save_to_excel)
@@ -48,6 +53,22 @@ class TextToExcelApp(QWidget):
         # Set layout
         self.setLayout(layout)
         self.show()
+
+    def load_product_models(self):
+        # Read the Excel file without skipping rows
+        df = pd.read_excel('data/酒店产品物料模型对照表.xls')
+
+        # Detect the row containing the 'productModel' keyword
+        product_model_row = df.apply(lambda row: row.astype(str).str.contains('productModel').any(), axis=1).idxmax()
+
+        # Read the Excel file again, skipping the rows before the detected row
+        df = pd.read_excel('data/酒店产品物料模型对照表.xls', skiprows=product_model_row+1)
+
+        # Extract the productModel column
+        product_models = df['productModel'].dropna().unique()
+
+        # Populate the dropdown
+        self.product_model_dropdown.addItems(product_models)
 
     def save_to_excel(self):
         user_input = self.text_input.text()
