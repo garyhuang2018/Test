@@ -18,10 +18,14 @@ class LogScanner(QWidget):
 
         # Menu bar for file selection and day range filter
         menubar = QMenuBar(self)
-        fileMenu = menubar.addMenu('读取数据库')
-        openFile = QAction('Open SQLite File', self)
+        fileMenu = menubar.addMenu('读取日志')
+        openFile = QAction('打开数据库', self)
         openFile.triggered.connect(self.select_file)
         fileMenu.addAction(openFile)
+        # New QAction for selecting log file
+        openLogFile = QAction('打开日志', self)
+        openLogFile.triggered.connect(self.select_log_file)
+        fileMenu.addAction(openLogFile)
 
         layout.setMenuBar(menubar)
 
@@ -58,7 +62,7 @@ class LogScanner(QWidget):
         self.time_range_layout.addWidget(self.start_time_range_label)
 
         self.start_time_range_edit = QTimeEdit(self)
-        self.start_time_range_edit.setTime(QTime(1, 0))  # Default to 1:00
+        self.start_time_range_edit.setTime(QTime(0, 0))  # Default to 1:00
         self.time_range_layout.addWidget(self.start_time_range_edit)
 
         self.end_time_range_label = QLabel('End Time Range:')
@@ -90,6 +94,13 @@ class LogScanner(QWidget):
             self.file_path = file_path
             self.display_sqlite_data()
 
+    def select_log_file(self):
+        options = QFileDialog.Options()
+        log_file_path, _ = QFileDialog.getOpenFileName(self, "Select Log File", "", "Log Files (*.log);;All Files (*)",
+                                                       options=options)
+        if log_file_path:
+            self.log_file_path = log_file_path
+
     def display_sqlite_data(self):
         if not os.path.exists(self.file_path):
             self.result_display.setText(f"Error: File {self.file_path} does not exist.")
@@ -118,10 +129,12 @@ class LogScanner(QWidget):
 
     def search_keyword(self):
         keyword = self.keyword_selector.currentText()
-        log_file_path = r'D:\11_客诉分析\0_过往客诉转用例\n6-logs\app.log'
-
-        if not os.path.exists(log_file_path):
-            self.result_display.setText(f"Error: File {log_file_path} does not exist.")
+        # Check if log file path is set
+        if not hasattr(self, 'log_file_path') or not self.log_file_path:
+            self.result_display.setText("Please select a log file before searching.")
+            return
+        if not os.path.exists(self.log_file_path):
+            self.result_display.setText(f"Error: File {self.log_file_path} does not exist.")
             return
 
         start_time = self.start_time_edit.dateTime().toPyDateTime()
@@ -130,7 +143,7 @@ class LogScanner(QWidget):
         end_time_range = self.end_time_range_edit.time().toPyTime()
 
         results = []
-        with open(log_file_path, 'r', encoding='utf-8') as file:
+        with open(self.log_file_path, 'r', encoding='utf-8') as file:
             for line in file:
                 if keyword in line or not keyword:
                     timestamp_str = line.split(' ')[0] + ' ' + line.split(' ')[1]
