@@ -9,6 +9,8 @@ from PyQt5.QtCore import QDateTime, QTime
 class LogScanner(QWidget):
     def __init__(self):
         super().__init__()
+        self.result_display = QTextEdit(self)
+        self.custom_keyword_input = QLineEdit(self)
         self.initUI()
 
     def initUI(self):
@@ -33,9 +35,14 @@ class LogScanner(QWidget):
         layout.addWidget(self.label)
 
         self.keyword_selector = QComboBox(self)
-        self.keyword_selector.addItem("execute scene: 1")
-        self.keyword_selector.addItem("execute scene: 2")
+        for i in range(1, 16):
+            self.keyword_selector.addItem(f"execute scene: {i}")
         layout.addWidget(self.keyword_selector)
+
+        self.custom_keyword_input.setPlaceholderText("Or enter custom keyword")
+        layout.addWidget(self.custom_keyword_input)
+
+        self.time_layout = QHBoxLayout()
         self.time_layout = QHBoxLayout()
 
         self.start_time_label = QLabel('Start Time:')
@@ -69,7 +76,7 @@ class LogScanner(QWidget):
         self.time_range_layout.addWidget(self.end_time_range_label)
 
         self.end_time_range_edit = QTimeEdit(self)
-        self.end_time_range_edit.setTime(QTime(6, 0))  # Default to 6:00
+        self.end_time_range_edit.setTime(QTime(23, 0))  # Default to 6:00
         self.time_range_layout.addWidget(self.end_time_range_edit)
 
         layout.addLayout(self.time_range_layout)
@@ -78,7 +85,6 @@ class LogScanner(QWidget):
         self.search_button.clicked.connect(self.search_keyword)
         layout.addWidget(self.search_button)
 
-        self.result_display = QTextEdit(self)
         self.result_display.setReadOnly(True)
         layout.addWidget(self.result_display)
 
@@ -95,11 +101,16 @@ class LogScanner(QWidget):
             self.display_sqlite_data()
 
     def select_log_file(self):
+        # options = QFileDialog.Options()
+        # log_file_path, _ = QFileDialog.getOpenFileName(self, "Select Log File", "", "Log Files (*.log);;All Files (*)",
+        #                                                options=options)
+        # if log_file_path:
+        #     self.log_file_path = log_file_path
         options = QFileDialog.Options()
-        log_file_path, _ = QFileDialog.getOpenFileName(self, "Select Log File", "", "Log Files (*.log);;All Files (*)",
-                                                       options=options)
-        if log_file_path:
-            self.log_file_path = log_file_path
+        log_file_paths, _ = QFileDialog.getOpenFileNames(self, "Select Log Files", "",
+                                                         "Log Files (*.log);;All Files (*)", options=options)
+        if log_file_paths:
+            self.log_file_paths = log_file_paths
 
     def display_sqlite_data(self):
         if not os.path.exists(self.file_path):
@@ -129,12 +140,12 @@ class LogScanner(QWidget):
 
     def search_keyword(self):
         keyword = self.keyword_selector.currentText()
-        # Check if log file path is set
-        if not hasattr(self, 'log_file_path') or not self.log_file_path:
-            self.result_display.setText("Please select a log file before searching.")
-            return
-        if not os.path.exists(self.log_file_path):
-            self.result_display.setText(f"Error: File {self.log_file_path} does not exist.")
+        custom_keyword = self.custom_keyword_input.text()
+        if custom_keyword:
+            keyword = custom_keyword
+        # Check if log file paths are set
+        if not hasattr(self, 'log_file_paths') or not self.log_file_paths:
+            self.result_display.setText("Please select log files before searching.")
             return
 
         start_time = self.start_time_edit.dateTime().toPyDateTime()
@@ -143,18 +154,23 @@ class LogScanner(QWidget):
         end_time_range = self.end_time_range_edit.time().toPyTime()
 
         results = []
-        with open(self.log_file_path, 'r', encoding='utf-8') as file:
-            for line in file:
-                if keyword in line or not keyword:
-                    timestamp_str = line.split(' ')[0] + ' ' + line.split(' ')[1]
-                    try:
-                        timestamp = QDateTime.fromString(timestamp_str, "yyyy-MM-dd HH:mm:ss.zzz").toPyDateTime()
-                        if start_time <= timestamp <= end_time:
-                            log_time = timestamp.time()
-                            if start_time_range <= log_time <= end_time_range:
-                                results.append(line)
-                    except ValueError:
-                        continue
+        for log_file_path in self.log_file_paths:
+            if not os.path.exists(log_file_path):
+                self.result_display.setText(f"Error: File {log_file_path} does not exist.")
+                continue
+
+            with open(log_file_path, 'r', encoding='utf-8') as file:
+                for line in file:
+                    if keyword in line or not keyword:
+                        timestamp_str = line.split(' ')[0] + ' ' + line.split(' ')[1]
+                        try:
+                            timestamp = QDateTime.fromString(timestamp_str, "yyyy-MM-dd HH:mm:ss.zzz").toPyDateTime()
+                            if start_time <= timestamp <= end_time:
+                                log_time = timestamp.time()
+                                if start_time_range <= log_time <= end_time_range:
+                                    results.append(line)
+                        except ValueError:
+                            continue
 
         if results:
             self.result_display.setText('\n'.join(results))
