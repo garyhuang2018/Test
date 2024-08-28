@@ -2,8 +2,9 @@ import os
 import sqlite3
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, \
-    QDateTimeEdit, QHBoxLayout, QFileDialog, QMenuBar, QAction, QTimeEdit, QComboBox
+    QDateTimeEdit, QHBoxLayout, QFileDialog, QMenuBar, QAction, QTimeEdit, QComboBox, QDialog
 from PyQt5.QtCore import QDateTime, QTime
+from PyQt5.QtGui import QPixmap
 
 
 class LogScanner(QWidget):
@@ -13,8 +14,18 @@ class LogScanner(QWidget):
         self.custom_keyword_input = QLineEdit(self)
         self.initUI()
 
+    def resource_path(self, relative_path):
+        """ Get absolute path to resource, works for dev and for PyInstaller """
+        try:
+            # PyInstaller creates a temp folder and stores path in _MEIPASS
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+
+        return os.path.join(base_path, relative_path)
+
     def initUI(self):
-        self.setWindowTitle('N6日志诊断工具V1.0')
+        self.setWindowTitle('N6问题诊断工具V1.0')
 
         layout = QVBoxLayout()
 
@@ -28,6 +39,12 @@ class LogScanner(QWidget):
         openLogFile = QAction('打开日志', self)
         openLogFile.triggered.connect(self.select_log_file)
         fileMenu.addAction(openLogFile)
+
+        # Add new menu item for user manual
+        helpMenu = menubar.addMenu('帮助')
+        userManualAction = QAction('用户手册', self)
+        userManualAction.triggered.connect(self.show_user_manual_qr)
+        helpMenu.addAction(userManualAction)
 
         layout.setMenuBar(menubar)
 
@@ -101,11 +118,6 @@ class LogScanner(QWidget):
             self.display_sqlite_data()
 
     def select_log_file(self):
-        # options = QFileDialog.Options()
-        # log_file_path, _ = QFileDialog.getOpenFileName(self, "Select Log File", "", "Log Files (*.log);;All Files (*)",
-        #                                                options=options)
-        # if log_file_path:
-        #     self.log_file_path = log_file_path
         options = QFileDialog.Options()
         log_file_paths, _ = QFileDialog.getOpenFileNames(self, "Select Log Files", "",
                                                          "Log Files (*.log);;All Files (*)", options=options)
@@ -176,6 +188,35 @@ class LogScanner(QWidget):
             self.result_display.setText('\n'.join(results))
         else:
             self.result_display.setText(f"No results found for keyword: {keyword} in the specified time range.")
+
+    def show_user_manual_qr(self):
+        qr_dialog = QRCodeDialog(self)
+        qr_dialog.exec_()
+
+
+class QRCodeDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("用户手册 QR 码")
+        self.setFixedSize(300, 350)
+
+        layout = QVBoxLayout()
+
+        # Use the resource_path function to get the correct path for pyinstaller
+        # qr_image_path = parent.resource_path("data/酒店产品使用说明书.png")
+        qr_image_path = r"C:\Users\garyh\PycharmProjects\test_tool\src\data\酒店产品使用说明书.png"
+        print(qr_image_path)
+        qr_pixmap = QPixmap(qr_image_path)
+        qr_pixmap = qr_pixmap.scaled(250, 250)  # Resize the image if needed
+
+        # Create QLabel and set QR code image
+        qr_label = QLabel()
+        qr_label.setPixmap(qr_pixmap)
+
+        layout.addWidget(qr_label)
+        layout.addWidget(QLabel("扫描二维码查看用户手册"))
+
+        self.setLayout(layout)
 
 
 if __name__ == '__main__':
