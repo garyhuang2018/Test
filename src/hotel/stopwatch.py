@@ -5,7 +5,7 @@ import os
 
 def get_camera():
     cameras = []
-    for i in range(2):  # Check for two cameras
+    for i in range(10):  # Check for up to 10 cameras
         cap = cv2.VideoCapture(i)
         if cap.isOpened():
             cameras.append(i)
@@ -20,7 +20,7 @@ def get_camera():
         print("Available cameras:")
         for i, cam in enumerate(cameras):
             print(f"{i + 1}. Camera {cam}")
-        choice = int(input("Choose a camera (1 or 2): ")) - 1
+        choice = int(input("Choose a camera (enter the number): ")) - 1
         return cameras[choice]
 
 
@@ -41,9 +41,6 @@ export_img_path = os.getcwd()
 if not os.path.exists(current_dir):
     print(f"Error: Directory {current_dir} does not exist.")
     exit()
-
-# Initialize the video capture object
-cap = cv2.VideoCapture(0)
 
 # Define the codec and create VideoWriter object
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -85,5 +82,4 @@ while True:
 
 # Release everything when done
 cap.release()
-out.release()  # Make sure to release the VideoWriter
 cv2.destroyAllWindows()
