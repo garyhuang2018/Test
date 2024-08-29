@@ -1,12 +1,60 @@
 import cv2
 import time
+import os
+
+
+def get_camera():
+    cameras = []
+    for i in range(2):  # Check for two cameras
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            cameras.append(i)
+            cap.release()
+
+    if len(cameras) == 0:
+        print("No cameras found.")
+        exit()
+    elif len(cameras) == 1:
+        return cameras[0]
+    else:
+        print("Available cameras:")
+        for i, cam in enumerate(cameras):
+            print(f"{i + 1}. Camera {cam}")
+        choice = int(input("Choose a camera (1 or 2): ")) - 1
+        return cameras[choice]
+
+
+camera_index = get_camera()
+cap = cv2.VideoCapture(camera_index)
+
+local_dir = "output"
+if os.path.exists(local_dir) is not True:
+    os.mkdir(local_dir)  # if dir is not exists, make a new dir
+
+# Get the current working directory
+current_dir = os.getcwd()
+
+# Define the output file path
+export_img_path = os.getcwd()
+
+# Ensure the directory exists
+if not os.path.exists(current_dir):
+    print(f"Error: Directory {current_dir} does not exist.")
+    exit()
 
 # Initialize the video capture object
 cap = cv2.VideoCapture(0)
 
 # Define the codec and create VideoWriter object
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
-out = cv2.VideoWriter('output.avi', fourcc, 20.0, (640, 480))
+print(export_img_path)
+out = cv2.VideoWriter("output.avi", fourcc, 20.0, (640, 480))
+
+# if not out.isOpened():
+#     print("Error: VideoWriter not opened")
+#     cap.release()
+#     cv2.destroyAllWindows()
+#     exit()
 
 # Start the stopwatch
 start_time = time.time()
@@ -37,5 +85,5 @@ while True:
 
 # Release everything when done
 cap.release()
-out.release()
+out.release()  # Make sure to release the VideoWriter
 cv2.destroyAllWindows()
