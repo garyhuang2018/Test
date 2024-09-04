@@ -4,12 +4,18 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
+from uiautomator2 import Device
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 
-def capture_and_crop_icon(device_serial=None):
+
+def capture_and_crop_icon(device_serial=None, crop_size=100):
     """
-    Capture a screenshot, let the user crop the icon, and save it.
+    Capture a screenshot, let the user click the icon center, and automatically crop around it.
 
     :param device_serial: The serial number of the Android device.
+    :param crop_size: Size of the square crop around the clicked point.
     :return: Path to the saved cropped icon image.
     """
     d = Device(device_serial)
@@ -19,36 +25,40 @@ def capture_and_crop_icon(device_serial=None):
 
     # Display the screenshot
     plt.imshow(cv2.cvtColor(screenshot, cv2.COLOR_BGR2RGB))
-    plt.title("Select the area around the '+' icon")
+    plt.title("Click on the center of the '+' icon")
 
-    # Let the user crop the image
-    crop_coords = plt.ginput(2, timeout=-1)
+    # Let the user click on the icon center
+    icon_center = plt.ginput(1, timeout=-1)[0]
     plt.close()
 
-    if len(crop_coords) != 2:
-        raise ValueError("You must select exactly two points to define the crop area.")
-
     # Convert coordinates to integers
-    x1, y1 = map(int, crop_coords[0])
-    x2, y2 = map(int, crop_coords[1])
+    center_x, center_y = map(int, icon_center)
+
+    # Calculate crop boundaries
+    half_size = crop_size // 2
+    left = max(center_x - half_size, 0)
+    top = max(center_y - half_size, 0)
+    right = min(center_x + half_size, screenshot.shape[1])
+    bottom = min(center_y + half_size, screenshot.shape[0])
 
     # Crop the image
-    cropped_icon = screenshot[min(y1, y2):max(y1, y2), min(x1, x2):max(x1, x2)]
+    cropped_icon = screenshot[top:bottom, left:right]
 
     # Save the cropped icon
     icon_path = 'cropped_plus_icon.png'
     cv2.imwrite(icon_path, cropped_icon)
 
     print(f"Cropped icon saved as {icon_path}")
-    return icon_path
+    return icon_path, (center_x, center_y)
 
 
-def click_add_icon_android(device_serial=None, icon_path=None):
+def click_add_icon_android(device_serial=None, icon_path=None, icon_center=None):
     """
     Function to find and click the '+' icon in an Android application interface using image recognition.
 
     :param device_serial: The serial number of the Android device.
     :param icon_path: Path to the '+' icon image file.
+    :param icon_center: The center coordinates of the icon in the original screenshot.
     """
     d = Device(device_serial)
 
@@ -71,12 +81,8 @@ def click_add_icon_android(device_serial=None, icon_path=None):
 
         # If the match is good enough, click on the icon
         if max_val > 0.8:  # Adjust this threshold as needed
-            icon_center = (
-                max_loc[0] + icon_template.shape[1] // 2,
-                max_loc[1] + icon_template.shape[0] // 2
-            )
             d.click(icon_center[0], icon_center[1])
-            print("Successfully clicked the '+' icon.")
+            print(f"Successfully clicked the '+' icon at {icon_center}.")
         else:
             print("Could not find the '+' icon. Make sure you're on the correct screen.")
 
@@ -88,8 +94,8 @@ def click_add_icon_android(device_serial=None, icon_path=None):
 if __name__ == "__main__":
     device_serial = None  # Replace with your device serial if needed
 
-    # Capture screenshot and let user crop the icon
-    icon_path = capture_and_crop_icon(device_serial)
+    # Capture screenshot and let user click the icon center
+    icon_path, icon_center = capture_and_crop_icon(device_serial)
 
     # Use the cropped icon for automation
-    click_add_icon_android(device_serial, icon_path)
+    click_add_icon_android(device_serial, icon_path, icon_center)
