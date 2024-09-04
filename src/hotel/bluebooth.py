@@ -1,101 +1,135 @@
-from uiautomator2 import Device
-import cv2
-import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
 
 from uiautomator2 import Device
 import cv2
 import numpy as np
-import matplotlib.pyplot as plt
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit, QScrollArea
+from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtCore import Qt, QTimer
+import sys
 
+class RecordingApp(QMainWindow):
+    def __init__(self, device_serial=None):
+        super().__init__()
+        self.device = Device(device_serial)
+        self.actions = []
+        self.recording = True
+        self.initUI()
 
-def capture_and_crop_icon(device_serial=None, crop_size=100):
-    """
-    Capture a screenshot, let the user click the icon center, and automatically crop around it.
+    def initUI(self):
+        self.setWindowTitle('Android Action Recorder')
+        self.setGeometry(100, 100, 1400, 900)
 
-    :param device_serial: The serial number of the Android device.
-    :param crop_size: Size of the square crop around the clicked point.
-    :return: Path to the saved cropped icon image.
-    """
-    d = Device(device_serial)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
 
-    # Capture screenshot
-    screenshot = d.screenshot(format='opencv')
+        layout = QHBoxLayout()
+        central_widget.setLayout(layout)
 
-    # Display the screenshot
-    plt.imshow(cv2.cvtColor(screenshot, cv2.COLOR_BGR2RGB))
-    plt.title("Click on the center of the '+' icon")
+        # Left panel
+        left_panel = QWidget()
+        left_layout = QVBoxLayout()
+        left_panel.setLayout(left_layout)
 
-    # Let the user click on the icon center
-    icon_center = plt.ginput(1, timeout=-1)[0]
-    plt.close()
+        self.instructions = QTextEdit()
+        self.instructions.setReadOnly(True)
+        self.instructions.setHtml("""
+        <h2>Instructions:</h2>
+        <ol>
+            <li>Click on the center of the icon you want to interact with on the right panel.</li>
+            <li>The action will be recorded and immediately performed on the device.</li>
+            <li>Continue clicking on icons to record more actions.</li>
+            <li>Press the 'Stop Recording' button when you're done.</li>
+        </ol>
+        <p>Recorded actions will be replayed automatically after stopping the recording.</p>
+        """)
+        left_layout.addWidget(self.instructions)
 
-    # Convert coordinates to integers
-    center_x, center_y = map(int, icon_center)
+        self.log_text = QTextEdit()
+        self.log_text.setReadOnly(True)
+        left_layout.addWidget(self.log_text)
 
-    # Calculate crop boundaries
-    half_size = crop_size // 2
-    left = max(center_x - half_size, 0)
-    top = max(center_y - half_size, 0)
-    right = min(center_x + half_size, screenshot.shape[1])
-    bottom = min(center_y + half_size, screenshot.shape[0])
+        self.stop_button = QPushButton('Stop Recording')
+        self.stop_button.clicked.connect(self.stop_recording)
+        left_layout.addWidget(self.stop_button)
 
-    # Crop the image
-    cropped_icon = screenshot[top:bottom, left:right]
+        # Right panel
+        right_panel = QScrollArea()
+        right_panel.setWidgetResizable(True)
+        self.screenshot_label = QLabel()
+        self.screenshot_label.setAlignment(Qt.AlignCenter)
+        right_panel.setWidget(self.screenshot_label)
 
-    # Save the cropped icon
-    icon_path = 'cropped_plus_icon.png'
-    cv2.imwrite(icon_path, cropped_icon)
+        layout.addWidget(left_panel, 1)
+        layout.addWidget(right_panel, 2)
 
-    print(f"Cropped icon saved as {icon_path}")
-    return icon_path, (center_x, center_y)
+        self.update_screenshot()
 
+        self.screenshot_label.mousePressEvent = self.on_screenshot_click
 
-def click_add_icon_android(device_serial=None, icon_path=None, icon_center=None):
-    """
-    Function to find and click the '+' icon in an Android application interface using image recognition.
+    def update_screenshot(self):
+        screenshot = self.device.screenshot(format='opencv')
+        height, width, channel = screenshot.shape
+        bytes_per_line = 3 * width
+        q_img = QImage(screenshot.data, width, height, bytes_per_line, QImage.Format_RGB888).rgbSwapped()
+        pixmap = QPixmap.fromImage(q_img)
+        self.screenshot_label.setPixmap(pixmap)
+        self.screenshot_label.setFixedSize(pixmap.size())
 
-    :param device_serial: The serial number of the Android device.
-    :param icon_path: Path to the '+' icon image file.
-    :param icon_center: The center coordinates of the icon in the original screenshot.
-    """
-    d = Device(device_serial)
+    def on_screenshot_click(self, event):
+        if not self.recording:
+            return
 
-    try:
-        # Take a screenshot
-        screenshot = d.screenshot(format='opencv')
+        pixmap = self.screenshot_label.pixmap()
+        x = event.pos().x()
+        y = event.pos().y()
 
-        # Load the icon template
-        icon_template = cv2.imread(icon_path, 0)
+        # Adjust coordinates based on the actual device size
+        device_x = int(x * (self.device.window_size()[0] / pixmap.width()))
+        device_y = int(y * (self.device.window_size()[1] / pixmap.height()))
 
-        if icon_template is None:
-            raise FileNotFoundError(f"Icon template not found at {icon_path}")
+        self.actions.append((device_x, device_y))
+        self.log(f"Recorded action: Click at ({device_x}, {device_y})")
 
-        # Convert screenshot to grayscale
-        gray_screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGR2GRAY)
+        # Perform the action
+        self.device.click(device_x, device_y)
+        self.log(f"Performed action: Click at ({device_x}, {device_y})")
 
-        # Perform template matching
-        result = cv2.matchTemplate(gray_screenshot, icon_template, cv2.TM_CCOEFF_NORMED)
-        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+        # Update screenshot after a short delay
+        QTimer.singleShot(1000, self.update_screenshot)
 
-        # If the match is good enough, click on the icon
-        if max_val > 0.8:  # Adjust this threshold as needed
-            d.click(icon_center[0], icon_center[1])
-            print(f"Successfully clicked the '+' icon at {icon_center}.")
+    def log(self, message):
+        self.log_text.append(message)
+        print(message)
+
+    def stop_recording(self):
+        self.recording = False
+        self.stop_button.setEnabled(False)
+        self.log("Recording stopped. Replaying actions...")
+        QTimer.singleShot(1000, self.replay_actions)
+
+    def replay_actions(self):
+        if not self.actions:
+            self.log("No actions to replay.")
+            return
+
+        action = self.actions.pop(0)
+        x, y = action
+        self.log(f"Replaying action: Click at ({x}, {y})")
+        self.device.click(x, y)
+
+        if self.actions:
+            QTimer.singleShot(2000, self.replay_actions)
         else:
-            print("Could not find the '+' icon. Make sure you're on the correct screen.")
+            self.log("All actions replayed.")
 
-    except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        QTimer.singleShot(1000, self.update_screenshot)
 
+def record_and_perform_actions(device_serial=None):
+    app = QApplication(sys.argv)
+    ex = RecordingApp(device_serial)
+    ex.show()
+    sys.exit(app.exec_())
 
 # Usage example
 if __name__ == "__main__":
-    device_serial = None  # Replace with your device serial if needed
-
-    # Capture screenshot and let user click the icon center
-    icon_path, icon_center = capture_and_crop_icon(device_serial)
-
-    # Use the cropped icon for automation
-    click_add_icon_android(device_serial, icon_path, icon_center)
+    record_and_perform_actions(device_serial=None)
