@@ -3,15 +3,21 @@
 from uiautomator2 import Device
 import cv2
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit, QScrollArea
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, QPushButton, QTextEdit, QScrollArea, QSizePolicy
 from PyQt5.QtGui import QImage, QPixmap, QKeyEvent
 from PyQt5.QtCore import Qt, QTimer
 import sys
 
+
 class RecordingApp(QMainWindow):
     def __init__(self, device_serial=None):
         super().__init__()
-        self.device = Device(device_serial)
+        try:
+            self.device = Device(device_serial)
+            self.device_available = True
+        except Exception:
+            self.device = None
+            self.device_available = False
         self.actions = []
         self.recording = True
         self.camera = cv2.VideoCapture(0)  # Initialize camera
@@ -19,8 +25,10 @@ class RecordingApp(QMainWindow):
         self.current_text = ""
         self.initUI()
 
+
+
     def initUI(self):
-        self.setWindowTitle('Android Action Recorder')
+        self.setWindowTitle('君和一页纸工厂调试工具')
         self.setGeometry(100, 100, 1800, 900)
 
         central_widget = QWidget()
@@ -37,15 +45,15 @@ class RecordingApp(QMainWindow):
         self.instructions = QTextEdit()
         self.instructions.setReadOnly(True)
         self.instructions.setHtml("""
-        <h2>Instructions:</h2>
+        <h2>测试流程说明:</h2>
         <ol>
-            <li>Click on the center of the icon you want to interact with on the middle panel.</li>
-            <li>After clicking, you can start typing immediately. The text will appear on the device.</li>
-            <li>Use the 'Backspace' key to delete text on the device.</li>
-            <li>Press 'Enter' to finish typing and return to click mode.</li>
-            <li>Press the 'Stop Recording' button when you're done.</li>
+            <li>准备1个安卓手机，1个USB摄像头</li>
+            <li>插卡酒店一页纸， 确认需求</li>
+            <li>设备上电</li>
+            <li>自动搜索、定位、命名</li>
+            <li>自动化测试输出结果</li>
         </ol>
-        <p>Recorded actions will be replayed automatically after stopping the recording.</p>
+        <p>测试完成后需要将酒店一页纸打印出来，签名确认</p>
         """)
         left_layout.addWidget(self.instructions)
 
@@ -63,6 +71,7 @@ class RecordingApp(QMainWindow):
         self.screenshot_label = QLabel()
         self.screenshot_label.setAlignment(Qt.AlignCenter)
         self.screenshot_label.setFocusPolicy(Qt.StrongFocus)
+        self.screenshot_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         middle_panel.setWidget(self.screenshot_label)
 
         # Right panel (Camera Capture)
@@ -85,13 +94,23 @@ class RecordingApp(QMainWindow):
         self.camera_timer.start(50)  # Update every 50ms
 
     def update_screenshot(self):
-        screenshot = self.device.screenshot(format='opencv')
-        height, width, channel = screenshot.shape
-        bytes_per_line = 3 * width
-        q_img = QImage(screenshot.data, width, height, bytes_per_line, QImage.Format_RGB888).rgbSwapped()
-        pixmap = QPixmap.fromImage(q_img)
-        self.screenshot_label.setPixmap(pixmap)
-        self.screenshot_label.setFixedSize(pixmap.size())
+        if self.device_available:
+            screenshot = self.device.screenshot(format='opencv')
+            height, width, channel = screenshot.shape
+            bytes_per_line = 3 * width
+            q_img = QImage(screenshot.data, width, height, bytes_per_line, QImage.Format_RGB888).rgbSwapped()
+            pixmap = QPixmap.fromImage(q_img)
+
+            # Scale the pixmap to fit the screenshot_label while maintaining aspect ratio
+            scaled_pixmap = pixmap.scaled(self.screenshot_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+            self.screenshot_label.setPixmap(scaled_pixmap)
+            self.screenshot_label.setAlignment(Qt.AlignCenter)  # Center the image in the label
+        else:
+            # Display message when no device is available
+            self.screenshot_label.setText(
+                "未连接到安卓手机，请检查.\nPlease connect a device and restart the application.")
+            self.screenshot_label.setStyleSheet("font-size: 18px; color: red;")
 
     def update_camera(self):
         ret, frame = self.camera.read()
@@ -104,7 +123,7 @@ class RecordingApp(QMainWindow):
             self.camera_label.setPixmap(pixmap.scaled(self.camera_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
 
     def on_screenshot_click(self, event):
-        if not self.recording:
+        if not self.recording or not self.device_available:
             return
 
         pixmap = self.screenshot_label.pixmap()
@@ -197,11 +216,13 @@ class RecordingApp(QMainWindow):
         self.camera.release()
         event.accept()
 
+
 def record_and_perform_actions(device_serial=None):
     app = QApplication(sys.argv)
     ex = RecordingApp(device_serial)
     ex.show()
     sys.exit(app.exec_())
+
 
 # Usage example
 if __name__ == "__main__":
