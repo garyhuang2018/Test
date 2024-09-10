@@ -34,16 +34,29 @@ def take_photo(camera_id, contour_area):
             cv2.rectangle(frame, (contour_area[0], contour_area[1]), pt2, (0, 255, 0), 2)
         cv2.imshow("selected_img", frame)
         sleep(3)
+        # 将这个文件pull到本地电脑上
+        local_dir = str(camera_id)
+        if os.path.exists(local_dir) is not True:
+            os.mkdir(local_dir)  # if dir is not exists, make a new dir
         curr_time = datetime.now()
         timestamp = datetime.strftime(curr_time, '%Y-%m-%d-%H-%M-%S')
-        export_img_path = os.getcwd() + '/' + timestamp + ".jpg"
+        export_img_path = os.getcwd() + '/' + local_dir + '/' + timestamp + ".jpg"
         print(export_img_path)
         sleep(1)
         cv2.imwrite(export_img_path, frame)
-        print("save usb capture successfuly!")
         cap.release()
         cv2.destroyAllWindows()
         return export_img_path, contour_area
+        # curr_time = datetime.now()
+        # timestamp = datetime.strftime(curr_time, '%Y-%m-%d-%H-%M-%S')
+        # export_img_path = os.getcwd() + '/' + timestamp + ".jpg"
+        # print(export_img_path)
+        # sleep(1)
+        # cv2.imwrite(export_img_path, frame)
+        # print("save usb capture successfuly!")
+        # cap.release()
+        # cv2.destroyAllWindows()
+        # return export_img_path, contour_area
     cap.release()
     cv2.destroyAllWindows()
 
