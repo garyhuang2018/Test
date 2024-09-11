@@ -1,88 +1,99 @@
 import cv2
 import numpy as np
 
+# 全局变量
+drawing = False
+ix, iy = -1, -1
+roi = None
+roi_selected = False
 
-def detect_red_light(frame):
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
+def draw_rectangle(event, x, y, flags, param):
+    global ix, iy, drawing, roi, roi_selected
+
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = True
+        ix, iy = x, y
+    elif event == cv2.EVENT_MOUSEMOVE:
+        if drawing:
+            param[0] = param[0].copy()
+            cv2.rectangle(param[0], (ix, iy), (x, y), (0, 255, 0), 2)
+    elif event == cv2.EVENT_LBUTTONUP:
+        drawing = False
+        roi = (min(ix, x), min(iy, y), abs(ix - x), abs(iy - y))
+        cv2.rectangle(param[0], (ix, iy), (x, y), (0, 255, 0), 2)
+
+
+def detect_red_light(frame, roi):
+    x, y, w, h = roi
+    roi_frame = frame[y:y + h, x:x + w]
+    hsv = cv2.cvtColor(roi_frame, cv2.COLOR_BGR2HSV)
+
+    # 定义红色的HSV范围
     lower_red1 = np.array([0, 100, 100])
     upper_red1 = np.array([10, 255, 255])
     lower_red2 = np.array([160, 100, 100])
     upper_red2 = np.array([180, 255, 255])
 
+    # 创建红色区域的掩码
     mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
     mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
     mask = cv2.bitwise_or(mask1, mask2)
 
-    kernel = np.ones((5, 5), np.uint8)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    # 计算红色区域的比例
+    red_ratio = np.sum(mask) / (w * h * 255)
 
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    potential_lights = []
-    for contour in contours:
-        area = cv2.contourArea(contour)
-        if 100 < area < 1000:
-            (x, y, w, h) = cv2.boundingRect(contour)
-            aspect_ratio = float(w) / h
-            if 0.8 < aspect_ratio < 1.2:
-                potential_lights.append((x, y, w, h))
-
-    return potential_lights
-
-
-def draw_lights(frame, lights, confirmed=False):
-    for i, (x, y, w, h) in enumerate(lights):
-        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        label = f"Light {i + 1}" if not confirmed else f"Confirmed {i + 1}"
-        cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    return red_ratio > 0.1 # 这个阈值可以根据需要调整
 
 
 def main():
+    global roi, roi_selected
     cap = cv2.VideoCapture(0)
-    confirmed_lights = []
+    cv2.namedWindow('Red Light Detection')
+    cv2.setMouseCallback('Red Light Detection', draw_rectangle, [None])
+
+    light_on = False
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        potential_lights = detect_red_light(frame)
-
-        # 绘制已确认的红灯
-        draw_lights(frame, confirmed_lights, confirmed=True)
-
-        # 如果没有已确认的红灯，绘制潜在的红灯
-        if not confirmed_lights:
-            draw_lights(frame, potential_lights)
-
-        cv2.putText(frame, f"Detected: {len(potential_lights)}, Confirmed: {len(confirmed_lights)}",
-                    (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        if roi is not None:
+            x, y, w, h = roi
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
         cv2.imshow('Red Light Detection', frame)
 
         key = cv2.waitKey(1) & 0xFF
         if key == ord('q'):
             break
-        elif key == ord('c') and potential_lights and not confirmed_lights:
-            # 创建一个新窗口来显示潜在的红灯区域
-            for i, (x, y, w, h) in enumerate(potential_lights):
-                light_region = frame[y:y + h, x:x + w]
-                cv2.imshow(f'Confirm Light {i + 1}', light_region)
+        elif key == 13:  # ENTER 键
+            if roi is not None:
+                roi_selected = True
+                print("区域已选择。开始检测红灯闪烁。")
+                break
 
-            # 等待用户确认
-            while True:
-                confirm_key = cv2.waitKey(0) & 0xFF
-                if confirm_key == ord('y'):
-                    confirmed_lights = potential_lights
-                    print(f"已确认 {len(confirmed_lights)} 个红灯")
-                    break
-                elif confirm_key == ord('n'):
-                    break
+    while roi_selected:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-            # 关闭确认窗口
-            for i in range(len(potential_lights)):
-                cv2.destroyWindow(f'Confirm Light {i + 1}')
+        x, y, w, h = roi
+        cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+        current_light_on = detect_red_light(frame, roi)
+        if current_light_on and not light_on:
+            light_on = True
+            cv2.imwrite("red_light_on.jpg", frame)
+            print("红灯亮起！已保存截图：red_light_on.jpg")
+        elif not current_light_on:
+            light_on = False
+
+        cv2.imshow('Red Light Detection', frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
     cap.release()
     cv2.destroyAllWindows()
