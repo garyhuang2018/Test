@@ -1,7 +1,8 @@
 import sys
 import cv2
 import numpy as np
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, \
+    QListWidget
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont
 from PIL import Image, ImageDraw, ImageFont
@@ -18,17 +19,18 @@ class RedLightDetector(QMainWindow):
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
 
-        self.light_point = None
-        self.light_name = ""
+        self.light_points = []  # 存储所有红灯点
+        self.light_names = []  # 存储所有红灯名称
+        self.initial_brightness = []  # 存储所有红灯的初始亮度
+        self.max_points = 15  # 最大红灯点数量
         self.detecting = False
         self.font = ImageFont.truetype(r"C:\Windows\Fonts\simsun.ttc", 20)
-        self.initial_brightness = None
         self.detection_timer = QTimer(self)
         self.detection_timer.timeout.connect(self.check_brightness)
 
     def initUI(self):
         self.setWindowTitle('红灯检测器')
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1000, 600)
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -39,7 +41,7 @@ class RedLightDetector(QMainWindow):
         self.video_label = QLabel()
         layout.addWidget(self.video_label)
 
-        self.instruction_label = QLabel("点击视频画面选择红灯中心点")
+        self.instruction_label = QLabel("点击视频画面选择红灯中心点（最多15个）")
         layout.addWidget(self.instruction_label)
 
         self.start_button = QPushButton("开始检测")
@@ -49,63 +51,71 @@ class RedLightDetector(QMainWindow):
         self.status_label = QLabel("状态：等待选择红灯点")
         layout.addWidget(self.status_label)
 
+        self.light_list = QListWidget()
+        layout.addWidget(self.light_list)
+
     def mousePressEvent(self, event):
         if not self.detecting and event.button() == Qt.LeftButton:
             x = event.pos().x() - self.video_label.x()
             y = event.pos().y() - self.video_label.y()
-            self.light_point = (x, y)
-            name, ok = QInputDialog.getText(self, "输入红灯名称", "请为该红灯命名：")
-            if ok and name:
-                self.light_name = name
-                self.status_label.setText(f"状态：已选择红灯点 ({x}, {y})，名称：{name}")
-                print(f"选择了红灯点：({x}, {y})，名称：{name}")
+            if len(self.light_points) < self.max_points:
+                name, ok = QInputDialog.getText(self, "输入红灯名称", "请为该红灯命名：")
+                if ok and name:
+                    self.light_points.append((x, y))
+                    self.light_names.append(name)
+                    self.light_list.addItem(f"{name}: ({x}, {y})")
+                    self.status_label.setText(f"状态：已选择 {len(self.light_points)} 个红灯点")
+                    print(f"选择了红灯点：({x}, {y})，名称：{name}")
+            else:
+                self.status_label.setText("已达到最大红灯点数量")
 
     def update_frame(self):
         try:
             ret, frame = self.cap.read()
             if ret:
-                if self.light_point:
-                    x, y = self.light_point
+                for point, name in zip(self.light_points, self.light_names):
+                    x, y = point
                     cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
-                    frame = self.put_chinese_text(frame, self.light_name, (x - 20, y - 20), (0, 255, 0))
+                    frame = self.put_chinese_text(frame, name, (x - 20, y - 20), (0, 255, 0))
 
                 self.display_image(frame)
         except Exception as e:
             print(f"更新帧时出错：{str(e)}")
 
     def start_detection(self):
-        if self.light_point:
+        if self.light_points:
             self.detecting = True
             self.instruction_label.setText("正在检测红灯...")
             self.start_button.setEnabled(False)
             print("开始检测红灯")
 
-            # 记录初始亮度
+            # 记录所有点的初始亮度
             frame = self.cap.read()[1]
-            x, y = self.light_point
-            roi = frame[y - 10:y + 10, x - 10:x + 10]
-            self.initial_brightness = np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))
-            print(f"初始亮度：{self.initial_brightness}")
+            self.initial_brightness = []
+            for x, y in self.light_points:
+                roi = frame[y - 10:y + 10, x - 10:x + 10]
+                brightness = np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))
+                self.initial_brightness.append(brightness)
+                print(f"点 ({x}, {y}) 的初始亮度：{brightness}")
 
             # 启动检测定时器，每秒检查一次
-            self.detection_timer.start(500)
+            self.detection_timer.start(600)
 
     def check_brightness(self):
-        if self.light_point:
-            frame = self.cap.read()[1]
-            x, y = self.light_point
+        frame = self.cap.read()[1]
+        for i, (point, name, initial_bright) in enumerate(
+                zip(self.light_points, self.light_names, self.initial_brightness)):
+            x, y = point
             roi = frame[y - 10:y + 10, x - 10:x + 10]
             current_brightness = np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))
 
-            brightness_change = current_brightness - self.initial_brightness
-            print(f"当前亮度：{current_brightness}，亮度变化：{brightness_change}")
+            brightness_change = current_brightness - initial_bright
+            print(f"{name} 当前亮度：{current_brightness}，亮度变化：{brightness_change}")
 
             if brightness_change > 3:
-                self.status_label.setText(f"状态：检测到 {self.light_name} 红灯亮起")
-                print(f"检测到 {self.light_name} 红灯亮起")
-                self.detection_timer.stop()  # 停止检测
-                self.detecting = False
-                self.start_button.setEnabled(True)
+                self.status_label.setText(f"状态：检测到 {name} 红灯亮起")
+                print(f"检测到 {name} 红灯亮起")
+                self.light_list.item(i).setText(f"{name}: ({x}, {y}) - 亮起")
 
     def put_chinese_text(self, img, text, position, color):
         img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
