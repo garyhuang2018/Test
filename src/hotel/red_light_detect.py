@@ -1,8 +1,9 @@
+import json
 import sys
 import cv2
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, \
-    QListWidget
+    QFileDialog, QListWidget, QHBoxLayout
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont
 from PIL import Image, ImageDraw, ImageFont
@@ -44,9 +45,20 @@ class RedLightDetector(QMainWindow):
         self.instruction_label = QLabel("点击视频画面选择红灯中心点（最多15个）")
         layout.addWidget(self.instruction_label)
 
+        button_layout = QHBoxLayout()
+        layout.addLayout(button_layout)
+
         self.start_button = QPushButton("开始检测")
         self.start_button.clicked.connect(self.start_detection)
-        layout.addWidget(self.start_button)
+        button_layout.addWidget(self.start_button)
+
+        self.save_button = QPushButton("保存测试点")
+        self.save_button.clicked.connect(self.save_test_points)
+        button_layout.addWidget(self.save_button)
+
+        self.load_button = QPushButton("加载测试点")
+        self.load_button.clicked.connect(self.load_test_points)
+        button_layout.addWidget(self.load_button)
 
         self.status_label = QLabel("状态：等待选择红灯点")
         layout.addWidget(self.status_label)
@@ -128,6 +140,37 @@ class RedLightDetector(QMainWindow):
         outImage = QImage(img, img.shape[1], img.shape[0], img.strides[0], qformat)
         outImage = outImage.rgbSwapped()
         self.video_label.setPixmap(QPixmap.fromImage(outImage))
+
+    def save_test_points(self):
+        if not self.light_points:
+            self.status_label.setText("状态：没有测试点可保存")
+            return
+
+        filename, _ = QFileDialog.getSaveFileName(self, "保存测试点", "", "JSON Files (*.json)")
+        if filename:
+            data = {
+                "light_points": self.light_points,
+                "light_names": self.light_names
+            }
+            with open(filename, 'w') as f:
+                json.dump(data, f)
+            self.status_label.setText(f"状态：测试点已保存到 {filename}")
+
+    def load_test_points(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "加载测试点", "", "JSON Files (*.json)")
+        if filename:
+            with open(filename, 'r') as f:
+                data = json.load(f)
+
+            self.light_points = data["light_points"]
+            self.light_names = data["light_names"]
+
+            self.light_list.clear()
+            for point, name in zip(self.light_points, self.light_names):
+                x, y = point
+                self.light_list.addItem(f"{name}: ({x}, {y})")
+
+            self.status_label.setText(f"状态：已加载 {len(self.light_points)} 个测试点")
 
 
 if __name__ == '__main__':
