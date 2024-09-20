@@ -7,7 +7,9 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPu
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont
 from PIL import Image, ImageDraw, ImageFont
-
+from playsound import playsound
+import sounddevice as sd
+import soundfile as sf
 
 class RedLightDetector(QMainWindow):
 
@@ -28,6 +30,7 @@ class RedLightDetector(QMainWindow):
         self.font = ImageFont.truetype(r"C:\Windows\Fonts\simsun.ttc", 20)
         self.detection_timer = QTimer(self)
         self.detection_timer.timeout.connect(self.check_brightness)
+        self.selected_point_index = None  # 新增：用于跟踪当前选中的测试点
 
     def initUI(self):
         self.setWindowTitle('红灯检测器')
@@ -36,17 +39,30 @@ class RedLightDetector(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()  # Change to horizontal layout for side panel
         central_widget.setLayout(layout)
 
+        # 新增：左侧面板
+        side_panel = QVBoxLayout()
+        layout.addLayout(side_panel)
+
+        # 新增：播放音频按钮
+        self.play_audio_button = QPushButton("播放音频")
+        self.play_audio_button.clicked.connect(self.play_audio)
+        side_panel.addWidget(self.play_audio_button)
+
+        # 主要内容布局
+        main_layout = QVBoxLayout()
+        layout.addLayout(main_layout)
+
         self.video_label = QLabel()
-        layout.addWidget(self.video_label)
+        main_layout.addWidget(self.video_label)
 
         self.instruction_label = QLabel("点击视频画面选择红灯中心点（最多15个）")
-        layout.addWidget(self.instruction_label)
+        main_layout.addWidget(self.instruction_label)
 
         button_layout = QHBoxLayout()
-        layout.addLayout(button_layout)
+        main_layout.addLayout(button_layout)
 
         self.start_button = QPushButton("开始检测")
         self.start_button.clicked.connect(self.start_detection)
@@ -61,16 +77,49 @@ class RedLightDetector(QMainWindow):
         button_layout.addWidget(self.load_button)
 
         self.status_label = QLabel("状态：等待选择红灯点")
-        layout.addWidget(self.status_label)
+        main_layout.addWidget(self.status_label)
 
         self.light_list = QListWidget()
-        layout.addWidget(self.light_list)
+        main_layout.addWidget(self.light_list)
+
+        # 新增：修改测试点按钮
+        self.edit_button = QPushButton("修改测试点")
+        self.edit_button.clicked.connect(self.edit_test_point)
+        button_layout.addWidget(self.edit_button)
+
+    def play_audio(self):
+        # Specify the path to your .m4a audio file
+        # audio_file_path = r"path/to/your/audiofile.m4a"  # Update this path
+
+        audio_file_path = "left_bed_light.mp3"
+        try:
+            data, samplerate = sf.read(audio_file_path)
+            sd.play(data, samplerate)
+            sd.wait()
+
+            # playsound(audio_file_path)
+            print("音频播放中...")
+        except Exception as e:
+            print(f"播放音频时出错：{str(e)}")
 
     def mousePressEvent(self, event):
-        if not self.detecting and event.button() == Qt.LeftButton:
-            x = event.pos().x() - self.video_label.x()
-            y = event.pos().y() - self.video_label.y()
-            if len(self.light_points) < self.max_points:
+        if self.detecting:
+            return
+
+        x = event.pos().x() - self.video_label.x()
+        y = event.pos().y() - self.video_label.y()
+
+        if event.button() == Qt.LeftButton:
+            if self.selected_point_index is not None:
+                # 修改选中的测试点
+                self.light_points[self.selected_point_index] = (x, y)
+                name = self.light_names[self.selected_point_index]
+                self.light_list.item(self.selected_point_index).setText(f"{name}: ({x}, {y})")
+                self.status_label.setText(f"状态：已修改测试点 {name} 的位置")
+                self.selected_point_index = None
+                self.edit_button.setText("修改测试点")
+            elif len(self.light_points) < self.max_points:
+                # 添加新的测试点
                 name, ok = QInputDialog.getText(self, "输入红灯名称", "请为该红灯命名：")
                 if ok and name:
                     self.light_points.append((x, y))
@@ -80,6 +129,14 @@ class RedLightDetector(QMainWindow):
                     print(f"选择了红灯点：({x}, {y})，名称：{name}")
             else:
                 self.status_label.setText("已达到最大红灯点数量")
+        elif event.button() == Qt.RightButton:
+            # 选择最近的测试点
+            if self.light_points:
+                distances = [((x-px)**2 + (y-py)**2)**0.5 for px, py in self.light_points]
+                nearest_index = distances.index(min(distances))
+                self.selected_point_index = nearest_index
+                self.status_label.setText(f"状态：已选中测试点 {self.light_names[nearest_index]}")
+                self.edit_button.setText("取消修改")
 
     def update_frame(self):
         try:
@@ -171,6 +228,15 @@ class RedLightDetector(QMainWindow):
                 self.light_list.addItem(f"{name}: ({x}, {y})")
 
             self.status_label.setText(f"状态：已加载 {len(self.light_points)} 个测试点")
+
+    def edit_test_point(self):
+        if self.selected_point_index is not None:
+            self.selected_point_index = None
+            self.edit_button.setText("修改测试点")
+            self.status_label.setText("状态：已取消修改测试点")
+        else:
+            self.status_label.setText("状态：请右键点击要修改的测试点")
+
 
 
 if __name__ == '__main__':
