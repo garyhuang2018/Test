@@ -10,6 +10,8 @@ from PIL import Image, ImageDraw, ImageFont
 from playsound import playsound
 import sounddevice as sd
 import soundfile as sf
+from PyQt5.QtCore import QThread, pyqtSignal  # 新增：导入 QThread 和 pyqtSignal
+
 
 class RedLightDetector(QMainWindow):
 
@@ -88,19 +90,11 @@ class RedLightDetector(QMainWindow):
         button_layout.addWidget(self.edit_button)
 
     def play_audio(self):
-        # Specify the path to your .m4a audio file
-        # audio_file_path = r"path/to/your/audiofile.m4a"  # Update this path
+        audio_file_path = "小度小度打开射灯.mp3"
+        self.audio_thread = AudioThread(audio_file_path)  # 新增：实例化音频线程
+        self.audio_thread.finished.connect(self.audio_thread.on_audio_finished)  # 新增：连接信号
+        self.audio_thread.start()  # 新增：启动线程
 
-        audio_file_path = "left_bed_light.mp3"
-        try:
-            data, samplerate = sf.read(audio_file_path)
-            sd.play(data, samplerate)
-            sd.wait()
-
-            # playsound(audio_file_path)
-            print("音频播放中...")
-        except Exception as e:
-            print(f"播放音频时出错：{str(e)}")
 
     def mousePressEvent(self, event):
         if self.detecting:
@@ -237,6 +231,27 @@ class RedLightDetector(QMainWindow):
         else:
             self.status_label.setText("状态：请右键点击要修改的测试点")
 
+
+class AudioThread(QThread):  # 新增：创建音频播放线程类
+    finished = pyqtSignal()  # 新增：信号用于通知音频播放完成
+
+    def __init__(self, audio_file_path):
+        super().__init__()
+        self.audio_file_path = audio_file_path
+
+    def run(self):
+        try:
+            data, samplerate = sf.read(self.audio_file_path)
+            sd.play(data, samplerate)
+            sd.wait()
+            print("音频播放中...")
+        except Exception as e:
+            print(f"播放音频时出错：{str(e)}")
+        finally:
+            self.finished.emit()  # 新增：发出完成信号
+
+    def on_audio_finished(self):  # 新增：音频播放完成的处理
+        print("音频播放完成")
 
 
 if __name__ == '__main__':
