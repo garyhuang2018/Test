@@ -1,6 +1,7 @@
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout, QSizePolicy
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout, QSizePolicy, QDialog
 from PyQt5.QtGui import QPainter, QPen
 from PyQt5.QtCore import Qt
+# from red_light_detect import detect_red_light  # Import the function
 
 
 class NavigationWidget(QWidget):
@@ -9,41 +10,53 @@ class NavigationWidget(QWidget):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle('Navigation Framework')
+        self.setWindowTitle('酒店一页纸模板测试')
         self.setGeometry(100, 100, 800, 600)
 
         # Main layout
         main_layout = QVBoxLayout()
 
-        # Operation hint label
+        # Operation hint label and navigation buttons layout
+        hint_nav_layout = QHBoxLayout()
         self.operation_hint = QLabel('Operation Hint: ')
-        main_layout.addWidget(self.operation_hint)
+        self.operation_hint.setFixedWidth(200)  # Set fixed width for the hint label
+        hint_nav_layout.addWidget(self.operation_hint)
 
         # Navigation buttons
         self.nav_buttons = []
+        nav_buttons_layout = QVBoxLayout()
         for i in range(5):
             button = QPushButton(f'Step {i + 1}')
             button.setEnabled(False)
             button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
             button.setMaximumWidth(100)  # Limit button width
             button.clicked.connect(self.step_clicked)
-            main_layout.addWidget(button)
+            nav_buttons_layout.addWidget(button)
             self.nav_buttons.append(button)
+        hint_nav_layout.addLayout(nav_buttons_layout)
+
+        # Result label
+        self.result_label = QLabel('Result: ')
+        self.result_label.setFixedWidth(200)  # Set fixed width for the result label
+        hint_nav_layout.addWidget(self.result_label)
+
+        main_layout.addLayout(hint_nav_layout)
 
         # Result confirmation buttons
         result_layout = QHBoxLayout()
         self.pass_button = QPushButton('PASS')
         self.fail_button = QPushButton('FAIL')
+        self.back_button = QPushButton('Back')
+        for button in [self.pass_button, self.fail_button, self.back_button]:
+            button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            button.setMaximumWidth(100)
         self.pass_button.clicked.connect(self.pass_clicked)
         self.fail_button.clicked.connect(self.fail_clicked)
+        self.back_button.clicked.connect(self.back_clicked)
         result_layout.addWidget(self.pass_button)
         result_layout.addWidget(self.fail_button)
+        result_layout.addWidget(self.back_button)
         main_layout.addLayout(result_layout)
-
-        # Back button
-        self.back_button = QPushButton('Back')
-        self.back_button.clicked.connect(self.back_clicked)
-        main_layout.addWidget(self.back_button)
 
         self.setLayout(main_layout)
         self.current_step = 0
@@ -54,6 +67,28 @@ class NavigationWidget(QWidget):
         step_index = self.nav_buttons.index(sender)
         self.current_step = step_index
         self.update_nav_buttons()
+
+        # Open a new window to run red_light_detect program at step 2
+        if self.current_step == 1:
+            self.open_red_light_window()
+
+    def open_red_light_window(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Red Light Detection')
+        dialog.setGeometry(150, 150, 400, 300)
+        layout = QVBoxLayout()
+        result_label = QLabel('Running red light detection...')
+        layout.addWidget(result_label)
+        dialog.setLayout(layout)
+
+        # Simulate running the red_light_detect function
+        # red_light_detected = detect_red_light()
+        # if red_light_detected:
+        #     result_label.setText('Red light detected!')
+        # else:
+        #     result_label.setText('No red light detected.')
+
+        dialog.exec_()
 
     def pass_clicked(self):
         self.current_step += 1
