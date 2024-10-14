@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>酒店产测调试工具</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QFrame" name="frame">
@@ -19,7 +19,7 @@
      <rect>
       <x>10</x>
       <y>10</y>
-      <width>211</width>
+      <width>241</width>
       <height>691</height>
      </rect>
     </property>
@@ -37,7 +37,7 @@
       <rect>
        <x>0</x>
        <y>620</y>
-       <width>200</width>
+       <width>231</width>
        <height>50</height>
       </rect>
      </property>
@@ -57,7 +57,7 @@
       <string>开始</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="img_path_btn">
+    <widget class="QPushButton" name="pass_button">
      <property name="enabled">
       <bool>true</bool>
      </property>
@@ -65,7 +65,7 @@
       <rect>
        <x>0</x>
        <y>560</y>
-       <width>91</width>
+       <width>75</width>
        <height>50</height>
       </rect>
      </property>
@@ -81,19 +81,22 @@
        <height>50</height>
       </size>
      </property>
+     <property name="styleSheet">
+      <string notr="true">background-color: green; color: white;</string>
+     </property>
      <property name="text">
-      <string>图片文件夹</string>
+      <string>PASS</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="test_record_btn">
+    <widget class="QPushButton" name="fail_button">
      <property name="enabled">
       <bool>true</bool>
      </property>
      <property name="geometry">
       <rect>
-       <x>110</x>
+       <x>80</x>
        <y>560</y>
-       <width>91</width>
+       <width>75</width>
        <height>50</height>
       </rect>
      </property>
@@ -109,40 +112,35 @@
        <height>50</height>
       </size>
      </property>
-     <property name="text">
-      <string>测试记录</string>
-     </property>
-    </widget>
-    <widget class="QLabel" name="result">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>420</y>
-       <width>131</width>
-       <height>61</height>
-      </rect>
+     <property name="styleSheet">
+      <string notr="true">background-color: red; color: white;</string>
      </property>
      <property name="text">
-      <string/>
+      <string>FAIL</string>
      </property>
     </widget>
     <widget class="QWidget" name="verticalLayoutWidget">
      <property name="geometry">
       <rect>
-       <x>10</x>
+       <x>0</x>
        <y>20</y>
-       <width>181</width>
-       <height>281</height>
+       <width>231</width>
+       <height>381</height>
       </rect>
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
-       <widget class="QPushButton" name="step2Button_2">
+       <widget class="QPushButton" name="step1">
+        <property name="font">
+         <font>
+          <family>宋体</family>
+         </font>
+        </property>
         <property name="styleSheet">
-         <string notr="true">background-color: rgb(0, 170, 0); color: white; font-weight: bold;</string>
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>第一步：</string>
+         <string>第一步：测试环境准备</string>
         </property>
        </widget>
       </item>
@@ -165,12 +163,12 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="step2Button">
+       <widget class="QPushButton" name="step2">
         <property name="styleSheet">
-         <string notr="true">background-color: #2196F3; color: white; font-weight: bold;</string>
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>第二步;</string>
+         <string>第二步;设备设置</string>
         </property>
        </widget>
       </item>
@@ -193,12 +191,12 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="step2Button_3">
+       <widget class="QPushButton" name="step3">
         <property name="styleSheet">
-         <string notr="true">background-color: #2196F3; color: white; font-weight: bold;</string>
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>Step 2</string>
+         <string>第三步：设备单点测试</string>
         </property>
        </widget>
       </item>
@@ -221,12 +219,12 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="step2Button_4">
+       <widget class="QPushButton" name="step4">
         <property name="styleSheet">
-         <string notr="true">background-color: #2196F3; color: white; font-weight: bold;</string>
+         <string notr="true"/>
         </property>
         <property name="text">
-         <string>Step 2</string>
+         <string>第四步：组合场景测试</string>
         </property>
        </widget>
       </item>
@@ -249,9 +247,9 @@
        </widget>
       </item>
       <item>
-       <widget class="QPushButton" name="step2Button_5">
+       <widget class="QPushButton" name="step5">
         <property name="styleSheet">
-         <string notr="true">background-color: #2196F3; color: white; font-weight: bold;</string>
+         <string notr="true"/>
         </property>
         <property name="text">
          <string>结果检查</string>
@@ -260,11 +258,42 @@
       </item>
      </layout>
     </widget>
+    <widget class="QPushButton" name="back_button">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="geometry">
+      <rect>
+       <x>160</x>
+       <y>560</y>
+       <width>75</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>50</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true"/>
+     </property>
+     <property name="text">
+      <string>返回</string>
+     </property>
+    </widget>
    </widget>
-   <widget class="QFrame" name="frame_2">
+   <widget class="QFrame" name="right_frame">
     <property name="geometry">
      <rect>
-      <x>230</x>
+      <x>260</x>
       <y>20</y>
       <width>1151</width>
       <height>551</height>
@@ -293,30 +322,16 @@
      <property name="geometry">
       <rect>
        <x>10</x>
-       <y>0</y>
-       <width>601</width>
-       <height>261</height>
+       <y>10</y>
+       <width>691</width>
+       <height>251</height>
       </rect>
      </property>
      <layout class="QGridLayout" name="gridLayout">
-      <item row="2" column="0">
-       <widget class="QRadioButton" name="int_radio_3">
-        <property name="text">
-         <string>蓝牙小网关</string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="0">
-       <widget class="QRadioButton" name="int_radio">
+       <widget class="QRadioButton" name="radioButton">
         <property name="text">
-         <string>蓝牙小网关</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QRadioButton" name="int_radio_2">
-        <property name="text">
-         <string>蓝牙小网关</string>
+         <string>RadioButton</string>
         </property>
        </widget>
       </item>
@@ -326,9 +341,9 @@
    <widget class="QScrollArea" name="scrollArea">
     <property name="geometry">
      <rect>
-      <x>250</x>
+      <x>260</x>
       <y>560</y>
-      <width>1131</width>
+      <width>1121</width>
       <height>141</height>
      </rect>
     </property>
@@ -340,7 +355,7 @@
       <rect>
        <x>0</x>
        <y>0</y>
-       <width>1129</width>
+       <width>1119</width>
        <height>139</height>
       </rect>
      </property>
