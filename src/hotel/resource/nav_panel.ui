@@ -261,7 +261,7 @@
       <string>返回</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="runBacktestPB">
+    <widget class="QPushButton" name="run_button">
      <property name="enabled">
       <bool>true</bool>
      </property>
@@ -381,74 +381,6 @@
        </property>
        <layout class="QHBoxLayout" name="right_layout">
         <item>
-         <widget class="QGroupBox" name="groupBox">
-          <property name="title">
-           <string>勾选需要测试的设备</string>
-          </property>
-          <widget class="QRadioButton" name="radioButton">
-           <property name="geometry">
-            <rect>
-             <x>20</x>
-             <y>40</y>
-             <width>331</width>
-             <height>16</height>
-            </rect>
-           </property>
-           <property name="text">
-            <string>蓝牙小网关</string>
-           </property>
-          </widget>
-          <widget class="QFrame" name="frame_2">
-           <property name="geometry">
-            <rect>
-             <x>-10</x>
-             <y>230</y>
-             <width>1101</width>
-             <height>521</height>
-            </rect>
-           </property>
-           <property name="frameShape">
-            <enum>QFrame::StyledPanel</enum>
-           </property>
-           <property name="frameShadow">
-            <enum>QFrame::Raised</enum>
-           </property>
-          </widget>
-         </widget>
-        </item>
-        <item>
-         <widget class="QGroupBox" name="groupBox_2">
-          <property name="title">
-           <string>操作提示</string>
-          </property>
-          <widget class="QListWidget" name="listWidget">
-           <property name="geometry">
-            <rect>
-             <x>10</x>
-             <y>20</y>
-             <width>331</width>
-             <height>391</height>
-            </rect>
-           </property>
-           <item>
-            <property name="text">
-             <string>1. 准备一台安卓手机连接测试电脑</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>2. 测试设备上电</string>
-            </property>
-           </item>
-           <item>
-            <property name="text">
-             <string>3. 通过搜索定位，小网关指示灯闪烁</string>
-            </property>
-           </item>
-          </widget>
-         </widget>
-        </item>
-        <item>
          <widget class="QGroupBox" name="groupBox_3">
           <property name="title">
            <string>检查结果</string>
@@ -458,8 +390,8 @@
             <rect>
              <x>10</x>
              <y>20</y>
-             <width>321</width>
-             <height>391</height>
+             <width>1061</width>
+             <height>441</height>
             </rect>
            </property>
            <attribute name="verticalHeaderDefaultSectionSize">
@@ -467,7 +399,12 @@
            </attribute>
            <column>
             <property name="text">
-             <string>检查步骤</string>
+             <string>操作提示</string>
+            </property>
+           </column>
+           <column>
+            <property name="text">
+             <string>运行日志</string>
             </property>
            </column>
            <column>
