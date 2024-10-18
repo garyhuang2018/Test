@@ -45,11 +45,12 @@ class FactoryToolApp(QMainWindow):
             # 创建提示框
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)  # 设置提示框的图标
-            msg.setText("未连接到手机！")  # 设置提示文本
+            msg.setText("未连接到手机,请先连接手机，打开USB调试！")  # 设置提示文本
             msg.setWindowTitle("提示")  # 设置窗口标题
             msg.show()
             # 显示提示框并等待用户关闭
             msg.exec_()
+            return
         self.app_action.start_app()
         self.app_action.unlock()
         # 添加新行

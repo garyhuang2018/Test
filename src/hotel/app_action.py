@@ -19,7 +19,11 @@ class App:
 
     def start_app(self):
         subprocess.run('adb shell am start com.gemvary.vhpsmarthome/.ui.main.LauncherActivity')
-        subprocess.run('adb shell input keyevent BACK')
+        # subprocess.run('adb shell input keyevent BACK')
+
+    def login(self, user_name, password):
+        self.device(resourceId="com.gemvary.vhpsmarthome:id/engineer_login_pwd").send_keys('888888')
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/engineer_login")
 
     def add_gateway(self):
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_gateway_name")
@@ -57,14 +61,15 @@ class App:
         return room_names
 
     def load_project_name(self):
+        #  检查弹出框
+        self.click_element_if_exists("com.gemvary.vhpsmarthome:id/save")
         # 点击首页
         self.click_element_if_exists('//*[@resource-id="com.gemvary.vhpsmarthome:id/ll_home"]/android.widget.ImageView[1]')
         if self.device.xpath(
                 '//*[@resource-id="com.gemvary.vhpsmarthome:id/ll_project_name"]/android.widget.ImageView[1]').exists:
             self.device.xpath(
                 '//*[@resource-id="com.gemvary.vhpsmarthome:id/ll_project_name"]/android.widget.ImageView[1]').click()
-
-        self.device(resourceId="com.gemvary.vhpsmarthome:id/fresh").click()
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/fresh")
         sleep(1)
         hotel_names = []
         # 使用-d参数导出logcat日志
@@ -104,6 +109,7 @@ class App:
             print(f"Clicked on element with resourceId: {resource_Id}")
         else:
             print(f"Element with xpath: {resource_Id} does not exist.")
+            return
 
     def click_element_if_exists(self, xpath):
         # 检查元素是否存在
@@ -168,7 +174,8 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-    d.load_rooms()
+    d.login("1","1")
+    # d.load_rooms()
     # d.add_gateway()
     # d.unlock()
     # print(d.load_project_name())
