@@ -420,25 +420,21 @@
      </widget>
     </widget>
     <widget class="QWidget" name="page_2">
-     <widget class="QTableWidget" name="tableWidget">
+     <widget class="QFrame" name="phone_view">
       <property name="geometry">
        <rect>
-        <x>0</x>
-        <y>20</y>
-        <width>1071</width>
-        <height>511</height>
+        <x>-1</x>
+        <y>19</y>
+        <width>471</width>
+        <height>521</height>
        </rect>
       </property>
-      <column>
-       <property name="text">
-        <string>设置过程描述</string>
-       </property>
-      </column>
-      <column>
-       <property name="text">
-        <string>设置过程图片</string>
-       </property>
-      </column>
+      <property name="frameShape">
+       <enum>QFrame::StyledPanel</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Raised</enum>
+      </property>
      </widget>
     </widget>
     <widget class="QWidget" name="page_3">

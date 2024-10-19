@@ -16,14 +16,12 @@ class FactoryToolApp(QMainWindow):
         self.nav_buttons.append(self.step4)
         self.nav_buttons.append(self.step5)
         self.app_action = App()
-        self.current_step = 0
         self.result_table.setColumnWidth(0, 250)
         self.result_table.setColumnWidth(1, 200)
         self.project_names = []
-
+        self.update_nav_buttons()
         self.pass_button.clicked.connect(self.pass_clicked)
         self.back_button.clicked.connect(self.back_clicked)
-        self.update_nav_buttons()
         self.run_button.clicked.connect(self.run_clicked)
 
     def run_clicked(self):
@@ -92,14 +90,6 @@ class FactoryToolApp(QMainWindow):
             print(f"用户确认选择项目：{selected_project}")
             # 在此处添加确认后的操作
             self.app_action.choose_project_name(selected_project)
-            # row_count = self.add_row()
-            # new_combo_box = QComboBox()
-            # new_combo_box.addItem("项目有网关")
-            # new_combo_box.addItem("项目无网关")
-            # self.result_table.setItem(row_count, 0, QTableWidgetItem("请选择项目是否有网关"))
-            # self.result_table.setCellWidget(row_count, 1, new_combo_box)
-            # self.result_table.setItem(row_count, 2, QTableWidgetItem('√'))
-            # new_combo_box.currentIndexChanged.connect(self.gateway_exists)
         else:
             print("用户取消选择")
 
@@ -110,7 +100,7 @@ class FactoryToolApp(QMainWindow):
 
     def update_nav_buttons(self):
         for i, button in enumerate(self.nav_buttons):
-            if i == self.current_step:
+            if i == self.stacked_widget.currentIndex():
                 button.setStyleSheet("background-color: green; color: white;")
                 button.setEnabled(True)
 
@@ -121,20 +111,29 @@ class FactoryToolApp(QMainWindow):
     def pass_clicked(self):
         # 切换当前页面
         current_index = self.stacked_widget.currentIndex()
-        self.current_step += 1
-        if self.current_step >= len(self.nav_buttons):
-            self.current_step = len(self.nav_buttons) - 1
-        next_index = (current_index + 1) % self.stacked_widget.count()
-        self.stacked_widget.setCurrentIndex(next_index)
+        next_index = current_index + 1
+        if next_index >= self.stacked_widget.count():
+            set_index = next_index - 1
+        else:
+            set_index = next_index
+        self.stacked_widget.setCurrentIndex(set_index)
         self.update_nav_buttons()
+        self.update_right_contents()
+
+    def update_right_contents(self):
+        current_index = self.stacked_widget.currentIndex()
 
     def back_clicked(self):
-        self.current_step -= 1
-        if self.current_step < 0:
-            self.current_step = 0
-        next_index = self.current_step % self.stacked_widget.count()
-        self.stacked_widget.setCurrentIndex(next_index)
+        # 切换当前页面
+        current_index = self.stacked_widget.currentIndex()
+        next_index = current_index - 1
+        if next_index >= self.stacked_widget.count():
+            set_index = next_index + 1
+        else:
+            set_index = next_index
+        self.stacked_widget.setCurrentIndex(set_index)
         self.update_nav_buttons()
+        self.update_right_contents()
 
 
 if __name__ == '__main__':
