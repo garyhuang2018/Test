@@ -261,95 +261,18 @@
       <string>返回</string>
      </property>
     </widget>
-    <widget class="QPushButton" name="run_button">
-     <property name="enabled">
-      <bool>true</bool>
-     </property>
-     <property name="geometry">
-      <rect>
-       <x>0</x>
-       <y>630</y>
-       <width>231</width>
-       <height>50</height>
-      </rect>
-     </property>
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>50</height>
-      </size>
-     </property>
-     <property name="text">
-      <string>开始测试</string>
-     </property>
-    </widget>
-    <widget class="QCheckBox" name="checkBox">
-     <property name="geometry">
-      <rect>
-       <x>30</x>
-       <y>460</y>
-       <width>71</width>
-       <height>16</height>
-      </rect>
-     </property>
-     <property name="text">
-      <string>CheckBox</string>
-     </property>
-    </widget>
-   </widget>
-   <widget class="QScrollArea" name="scrollArea">
-    <property name="geometry">
-     <rect>
-      <x>260</x>
-      <y>560</y>
-      <width>1121</width>
-      <height>141</height>
-     </rect>
-    </property>
-    <property name="widgetResizable">
-     <bool>true</bool>
-    </property>
-    <widget class="QWidget" name="log">
-     <property name="geometry">
-      <rect>
-       <x>0</x>
-       <y>0</y>
-       <width>1119</width>
-       <height>139</height>
-      </rect>
-     </property>
-     <widget class="QLabel" name="log_label">
-      <property name="geometry">
-       <rect>
-        <x>10</x>
-        <y>10</y>
-        <width>1141</width>
-        <height>121</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>点击开始，启动测试</string>
-      </property>
-     </widget>
-    </widget>
    </widget>
    <widget class="QStackedWidget" name="stacked_widget">
     <property name="geometry">
      <rect>
       <x>270</x>
       <y>0</y>
-      <width>1091</width>
-      <height>551</height>
+      <width>1131</width>
+      <height>691</height>
      </rect>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="page">
      <widget class="QFrame" name="right_frame">
@@ -413,6 +336,34 @@
             </property>
            </column>
           </widget>
+          <widget class="QPushButton" name="run_button">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="geometry">
+            <rect>
+             <x>10</x>
+             <y>470</y>
+             <width>231</width>
+             <height>50</height>
+            </rect>
+           </property>
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>50</height>
+            </size>
+           </property>
+           <property name="text">
+            <string>开始检查</string>
+           </property>
+          </widget>
          </widget>
         </item>
        </layout>
@@ -420,13 +371,13 @@
      </widget>
     </widget>
     <widget class="QWidget" name="page_2">
-     <widget class="QFrame" name="phone_view">
+     <widget class="QFrame" name="phone_frame">
       <property name="geometry">
        <rect>
         <x>-1</x>
         <y>19</y>
-        <width>471</width>
-        <height>521</height>
+        <width>1121</width>
+        <height>671</height>
        </rect>
       </property>
       <property name="frameShape">
@@ -435,6 +386,105 @@
       <property name="frameShadow">
        <enum>QFrame::Raised</enum>
       </property>
+      <widget class="QWidget" name="horizontalLayoutWidget_2">
+       <property name="geometry">
+        <rect>
+         <x>680</x>
+         <y>9</y>
+         <width>321</width>
+         <height>661</height>
+        </rect>
+       </property>
+       <layout class="QHBoxLayout" name="phone_layout"/>
+      </widget>
+      <widget class="QTableWidget" name="result_table_2">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>10</y>
+         <width>661</width>
+         <height>221</height>
+        </rect>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>661</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <attribute name="verticalHeaderDefaultSectionSize">
+        <number>50</number>
+       </attribute>
+       <row>
+        <property name="text">
+         <string>1</string>
+        </property>
+       </row>
+       <row>
+        <property name="text">
+         <string>2</string>
+        </property>
+       </row>
+       <column>
+        <property name="text">
+         <string>操作提示</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>运行日志</string>
+        </property>
+       </column>
+       <column>
+        <property name="text">
+         <string>结果</string>
+        </property>
+       </column>
+       <item row="0" column="0">
+        <property name="text">
+         <string>请在右侧界面选择房间信息后点击【已确定房间】按钮</string>
+        </property>
+       </item>
+       <item row="1" column="0">
+        <property name="text">
+         <string/>
+        </property>
+       </item>
+      </widget>
+      <widget class="QLabel" name="label">
+       <property name="geometry">
+        <rect>
+         <x>1030</x>
+         <y>60</y>
+         <width>81</width>
+         <height>131</height>
+        </rect>
+       </property>
+       <property name="font">
+        <font>
+         <family>微软雅黑</family>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>双击鼠标点击
+右击界面刷新</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="confirm_room_btn">
+       <property name="geometry">
+        <rect>
+         <x>1030</x>
+         <y>170</y>
+         <width>75</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>已确定房间</string>
+       </property>
+      </widget>
      </widget>
     </widget>
     <widget class="QWidget" name="page_3">
