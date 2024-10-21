@@ -267,12 +267,12 @@
      <rect>
       <x>270</x>
       <y>0</y>
-      <width>1131</width>
-      <height>691</height>
+      <width>1121</width>
+      <height>751</height>
      </rect>
     </property>
     <property name="currentIndex">
-     <number>1</number>
+     <number>0</number>
     </property>
     <widget class="QWidget" name="page">
      <widget class="QFrame" name="right_frame">
@@ -488,17 +488,69 @@
      </widget>
     </widget>
     <widget class="QWidget" name="page_3">
-     <widget class="QGroupBox" name="groupBox_4">
+     <widget class="QLabel" name="video_label">
       <property name="geometry">
        <rect>
-        <x>250</x>
-        <y>140</y>
-        <width>120</width>
-        <height>80</height>
+        <x>0</x>
+        <y>0</y>
+        <width>631</width>
+        <height>731</height>
        </rect>
       </property>
-      <property name="title">
-       <string>PAGE3</string>
+      <property name="text">
+       <string>TextLabel</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="start_button">
+      <property name="geometry">
+       <rect>
+        <x>740</x>
+        <y>90</y>
+        <width>75</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>开始检测</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="load_button">
+      <property name="geometry">
+       <rect>
+        <x>820</x>
+        <y>90</y>
+        <width>75</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>加载测试区</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="save_button">
+      <property name="geometry">
+       <rect>
+        <x>900</x>
+        <y>90</y>
+        <width>75</width>
+        <height>23</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>保存测试区</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="status_label">
+      <property name="geometry">
+       <rect>
+        <x>743</x>
+        <y>52</y>
+        <width>301</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>TextLabel</string>
       </property>
      </widget>
     </widget>
