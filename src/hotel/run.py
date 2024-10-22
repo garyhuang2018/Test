@@ -2,7 +2,7 @@
 # __author__= gary
 import json
 import subprocess
-
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtCore import QUrl, QRect
 from PyQt5.QtGui import QImage, QPixmap, QPainter
@@ -14,6 +14,39 @@ import cv2
 from PyQt5.QtCore import Qt, QTimer
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+
+
+class CameraThread(QThread):
+    frame_captured = pyqtSignal(QImage)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.cap = cv2.VideoCapture(0)
+        self.font = ImageFont.truetype(r"C:\Windows\Fonts\simsun.ttc", 20)
+        self.running = True
+
+    def run(self):
+        while self.running:
+            ret, frame = self.cap.read()
+            if ret:
+                for point, name in zip(self.parent().light_points, self.parent().light_names):
+                    x, y = point
+                    cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+                    frame = self.put_chinese_text(frame, name, (x - 20, y - 50), (0, 255, 0))
+                qformat = QImage.Format_RGB888
+                outImage = QImage(frame, frame.shape[1], frame.shape[0], frame.strides[0], qformat)
+                outImage = outImage.rgbSwapped()
+                self.frame_captured.emit(outImage)
+
+    def put_chinese_text(self, img, text, position, color):
+        img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(img_pil)
+        draw.text(position, text, font=self.font, fill=color)
+        return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+
+    def stop(self):
+        self.running = False
+        self.cap.release()
 
 
 class FactoryToolApp(QMainWindow):
@@ -39,23 +72,49 @@ class FactoryToolApp(QMainWindow):
         self.confirm_room_btn.clicked.connect(self.confirm_room)
         self.combo_box = None  # Initialize combo_box as None
         #  Initialize camera data
-        self.cap = None
         self.timer = None
         self.detecting = False
         self.light_points = []  # 存储所有红灯点
         self.light_names = []  # 存储所有红灯名称
         self.initial_brightness = []  # 存储所有红灯的初始亮度
         self.max_points = 15  # 最大红灯点数量
-        self.selected_point_index = None  # 新增：用于跟踪当前选中的测试点
         self.light_list = QListWidget()
         self.start_button.clicked.connect(self.start_detection)
         self.detection_timer = QTimer(self)
         self.detection_timer.timeout.connect(self.check_brightness)
         self.save_button.clicked.connect(self.save_test_points)
         self.load_button.clicked.connect(self.load_test_points)
+        self.camera_thread = CameraThread(self)
+        self.camera_thread.frame_captured.connect(self.update_video_label)
+        self.delete_light_points.clicked.connect(self.delete_points)
+        self.search_button.clicked.connect(self.search)
+        self.swipe_up_btn_2.clicked.connect(self.swipe_up)
+        self.swipe_down_btn_2.clicked.connect(self.swipe_down)
+
+    def swipe_down(self):
+        self.app_action.swipe_down()
+
+    def swipe_up(self):
+        self.app_action.swipe_up()
+
+    def search(self):
+        self.app_action.add_light_switchs()
+
+    def delete_points(self):
+        self.light_points.clear()
+
+    def update_video_label(self, image):
+        self.video_label.setPixmap(QPixmap.fromImage(image))
 
     def confirm_room(self):
+        # 获取当前行数
+        # row_count = self.result_table2.rowCount()
+
+        # 添加新行
+        # self.result_table2.setItem(0, 0, QTableWidgetItem("右侧点击屏幕搜索设备，并将设备上电"))
+
         room_name = self.app_action.get_selected_room()
+
         if room_name:
             # Create a confirmation dialog
             msg_box = QMessageBox()
@@ -72,9 +131,6 @@ class FactoryToolApp(QMainWindow):
                 # self.result_table_2.insertRow(row_count)
                 self.result_table_2.setItem(0, 1, QTableWidgetItem(msg))
                 self.result_table_2.setItem(0, 2, QTableWidgetItem('√'))
-
-        # if room_name:
-        #     self.pop_up_tips("确定", room_name)
 
     def run_clicked(self):
         if self.combo_box:
@@ -114,6 +170,7 @@ class FactoryToolApp(QMainWindow):
             self.result_table.setItem(row_count + 1, 2, QTableWidgetItem('√'))
             self.combo_box.currentIndexChanged.connect(self.status_changed)
             self.combo_box.setEnabled(True)  # Enable combo_box for selection
+
 
     def pop_up_tips(self, title, text):
         # 创建提示框
@@ -187,12 +244,7 @@ class FactoryToolApp(QMainWindow):
             # 创建一个 QWebEngineView 用于显示网页
             self.run_weditor()
         if current_index == 2:
-            print('third step')
-            if self.cap is None:
-                self.cap = cv2.VideoCapture(0)
-                self.timer = QTimer(self)
-                self.timer.timeout.connect(self.update_frame)
-                self.timer.start(30)
+            self.camera_thread.start()
 
     def run_weditor(self):
         # Run weditor in a subprocess
@@ -203,8 +255,6 @@ class FactoryToolApp(QMainWindow):
         url = QUrl("http://localhost:17310")
         self.web_view.setUrl(url)
         self.phone_layout.addWidget(self.web_view)
-        # Show the operation area widget
-        # self.phone_frame.setVisible(True)
 
     def back_clicked(self):
         # 切换当前页面
@@ -218,55 +268,25 @@ class FactoryToolApp(QMainWindow):
         self.update_nav_buttons()
         self.update_right_contents()
 
-    def update_frame(self):
-        # handle camera update, display camera view
-        try:
-            ret, frame = self.cap.read()
-            if ret:
-                for point, name in zip(self.light_points, self.light_names):
-                    x, y = point
-                    # Draw the circle at the specified point
-                    cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
-                qformat = QImage.Format_RGB888
-                outImage = QImage(frame, frame.shape[1], frame.shape[0], frame.strides[0], qformat)
-                outImage = outImage.rgbSwapped()
-                self.video_label.setPixmap(QPixmap.fromImage(outImage))
-        except Exception as e:
-            print(f"更新帧时出错：{str(e)}")
-
-    def put_chinese_text(self, img, text, position, color):
-        img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(img_pil)
-        draw.text(position, text, font=self.font, fill=color)
-        return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
-
     def mousePressEvent(self, event):
         if self.detecting:
             return
 
         if event.button() == Qt.LeftButton:
-            print('event', event.x(), event.y())
-            print('stack',self.stacked_widget.x(), self.stacked_widget.y())
-            print('video_label', self.video_label.x(), self.video_label.y())
-            frame_height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-            height = self.video_label.height() - self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-            print("VIDEO LABEL HEIGHT", self.video_label.height(), "CAP HEIGHT",self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            # print('event', event.x(), event.y())
+            # print('stack',self.stacked_widget.x(), self.stacked_widget.y())
+            # print('video_label', self.video_label.x(), self.video_label.y())
+            frame_height = self.camera_thread.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            height = self.video_label.height() - self.camera_thread.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+            print("VIDEO LABEL HEIGHT", self.video_label.height(), "CAP HEIGHT",self.camera_thread.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             x = event.x() - self.stacked_widget.x()
             y = event.y() - self.video_label.y()
             scale = frame_height/self.video_label.height()
             print(scale)
             y = y - int(height/2) - 22
-            if self.selected_point_index is not None:
-                # Modify the selected test point
-                self.light_points[self.selected_point_index] = (x, y)
-                name = self.light_names[self.selected_point_index]
-                self.light_list.item(self.selected_point_index).setText(f"{name}: ({x}, {y})")
-                self.status_label.setText(f"状态：已修改测试点 {name} 的位置")
-                self.selected_point_index = None
-                self.edit_button.setText("修改测试点")
-            elif len(self.light_points) < self.max_points:
+            if len(self.light_points) < self.max_points:
                 # Add a new test point
-                name, ok = QInputDialog.getText(self, "输入红灯名称", "请为该红灯命名：")
+                name, ok = QInputDialog.getText(self, "输入区域名称", "请为该区域命名：")
                 if ok and name:
                     self.light_points.append((x, y))
                     self.light_names.append(name)
@@ -283,7 +303,7 @@ class FactoryToolApp(QMainWindow):
             print("开始检测红灯")
 
             # 记录所有点的初始亮度
-            frame = self.cap.read()[1]
+            frame = self.camera_thread.cap.read()[1]
             for x, y in self.light_points:
                 roi = frame[y - 10:y + 10, x - 10:x + 10]
                 brightness = np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))
@@ -294,7 +314,7 @@ class FactoryToolApp(QMainWindow):
             self.detection_timer.start(600)
 
     def check_brightness(self):
-        frame = self.cap.read()[1]
+        frame = self.camera_thread.cap.read()[1]
         for i, (point, name, initial_bright) in enumerate(
                 zip(self.light_points, self.light_names, self.initial_brightness)):
             x, y = point
@@ -339,12 +359,10 @@ class FactoryToolApp(QMainWindow):
                 self.light_list.addItem(f"{name}: ({x}, {y})")
 
     def closeEvent(self, event):
-        # 释放摄像头资源
-        self.cap.release()
-        # 停止定时器
-        if self.timer:
-            self.timer.stop()
-        # 接受关闭事件
+        # Stop the camera thread
+        self.camera_thread.stop()
+        self.camera_thread.wait()
+        # Accept the close event
         event.accept()
 
 
