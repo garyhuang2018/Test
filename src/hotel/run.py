@@ -16,6 +16,21 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 
+class WeditorThread(QThread):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.process = None
+
+    def run(self):
+        self.process = subprocess.Popen(['weditor'])
+        self.process.wait()  # Wait for the process to complete
+
+    def stop(self):
+        if self.process:
+            self.process.terminate()
+            self.process.wait()
+
+
 class CameraThread(QThread):
     frame_captured = pyqtSignal(QImage)
 
@@ -52,6 +67,7 @@ class CameraThread(QThread):
 class FactoryToolApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.weditor_thread = WeditorThread(self)
         self.web_view = QWebEngineView()
         uic.loadUi('resource/nav_panel.ui', self)
         self.nav_buttons = []
@@ -85,11 +101,16 @@ class FactoryToolApp(QMainWindow):
         self.save_button.clicked.connect(self.save_test_points)
         self.load_button.clicked.connect(self.load_test_points)
         self.camera_thread = CameraThread(self)
+
         self.camera_thread.frame_captured.connect(self.update_video_label)
         self.delete_light_points.clicked.connect(self.delete_points)
         self.search_button.clicked.connect(self.search)
         self.swipe_up_btn_2.clicked.connect(self.swipe_up)
         self.swipe_down_btn_2.clicked.connect(self.swipe_down)
+
+    # def start_camera_thread(self):
+    #     if not self.camera_thread.isRunning():
+    #         self.camera_thread.start()
 
     def swipe_down(self):
         self.app_action.swipe_down()
@@ -171,7 +192,6 @@ class FactoryToolApp(QMainWindow):
             self.combo_box.currentIndexChanged.connect(self.status_changed)
             self.combo_box.setEnabled(True)  # Enable combo_box for selection
 
-
     def pop_up_tips(self, title, text):
         # 创建提示框
         msg = QMessageBox()
@@ -244,14 +264,14 @@ class FactoryToolApp(QMainWindow):
             # 创建一个 QWebEngineView 用于显示网页
             self.run_weditor()
         if current_index == 2:
-            self.camera_thread.start()
+            if not self.camera_thread.isRunning():
+                self.camera_thread.start()
 
     def run_weditor(self):
-        # Run weditor in a subprocess
-        subprocess.Popen(['weditor'])
-
+        # Start the weditor thread
+        if not self.weditor_thread.isRunning():
+            self.weditor_thread.start()
         # Load the weditor interface in the web view
-        # Convert the string URL to a QUrl object
         url = QUrl("http://localhost:17310")
         self.web_view.setUrl(url)
         self.phone_layout.addWidget(self.web_view)
@@ -362,6 +382,9 @@ class FactoryToolApp(QMainWindow):
         # Stop the camera thread
         self.camera_thread.stop()
         self.camera_thread.wait()
+        # Stop the weditor thread
+        self.weditor_thread.stop()
+        self.weditor_thread.wait()
         # Accept the close event
         event.accept()
 
