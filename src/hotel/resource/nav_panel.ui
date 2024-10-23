@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1409</width>
-    <height>778</height>
+    <width>1492</width>
+    <height>770</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -267,12 +267,12 @@
      <rect>
       <x>270</x>
       <y>0</y>
-      <width>761</width>
+      <width>1091</width>
       <height>751</height>
      </rect>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>4</number>
     </property>
     <widget class="QWidget" name="page">
      <widget class="QFrame" name="right_frame">
@@ -440,27 +440,6 @@
         </property>
        </item>
       </widget>
-      <widget class="QLabel" name="label">
-       <property name="geometry">
-        <rect>
-         <x>1030</x>
-         <y>60</y>
-         <width>81</width>
-         <height>131</height>
-        </rect>
-       </property>
-       <property name="font">
-        <font>
-         <family>微软雅黑</family>
-         <weight>75</weight>
-         <bold>true</bold>
-        </font>
-       </property>
-       <property name="text">
-        <string>双击鼠标点击
-右击界面刷新</string>
-       </property>
-      </widget>
       <widget class="QPushButton" name="confirm_room_btn">
        <property name="geometry">
         <rect>
@@ -472,32 +451,6 @@
        </property>
        <property name="text">
         <string>已确定房间</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="swipe_up_btn">
-       <property name="geometry">
-        <rect>
-         <x>1030</x>
-         <y>170</y>
-         <width>75</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>向上滑动</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="swipe_down_btn">
-       <property name="geometry">
-        <rect>
-         <x>1030</x>
-         <y>210</y>
-         <width>75</width>
-         <height>23</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>向下滑动</string>
        </property>
       </widget>
      </widget>
@@ -622,18 +575,24 @@
      </widget>
     </widget>
     <widget class="QWidget" name="page_4">
-     <widget class="QGroupBox" name="groupBox_5">
+     <widget class="QWidget" name="horizontalLayoutWidget_3">
       <property name="geometry">
        <rect>
-        <x>330</x>
-        <y>210</y>
-        <width>120</width>
-        <height>80</height>
+        <x>9</x>
+        <y>9</y>
+        <width>731</width>
+        <height>711</height>
        </rect>
       </property>
-      <property name="title">
-       <string>PAGE4</string>
-      </property>
+      <layout class="QHBoxLayout" name="page_4_layout">
+       <item>
+        <widget class="QLabel" name="video_label_2">
+         <property name="text">
+          <string>TextLabel</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
     <widget class="QWidget" name="page_5">
@@ -647,7 +606,7 @@
        </rect>
       </property>
       <property name="title">
-       <string>PAGE5</string>
+       <string>测试结果汇总</string>
       </property>
      </widget>
     </widget>
@@ -663,31 +622,46 @@
     </property>
     <layout class="QHBoxLayout" name="phone_layout"/>
    </widget>
-   <widget class="QPushButton" name="swipe_up_btn_2">
+   <widget class="QWidget" name="verticalLayoutWidget_2">
     <property name="geometry">
      <rect>
-      <x>1040</x>
-      <y>700</y>
-      <width>75</width>
-      <height>23</height>
+      <x>1370</x>
+      <y>30</y>
+      <width>101</width>
+      <height>291</height>
      </rect>
     </property>
-    <property name="text">
-     <string>上划</string>
-    </property>
-   </widget>
-   <widget class="QPushButton" name="swipe_down_btn_2">
-    <property name="geometry">
-     <rect>
-      <x>1140</x>
-      <y>700</y>
-      <width>75</width>
-      <height>23</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>下划</string>
-    </property>
+    <layout class="QVBoxLayout" name="phone_layout2">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="font">
+        <font>
+         <family>微软雅黑</family>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="text">
+        <string>双击鼠标点击
+右击界面刷新</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="swipe_up_btn">
+       <property name="text">
+        <string>向上滑动</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="swipe_down_btn">
+       <property name="text">
+        <string>向下滑动</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
@@ -696,7 +670,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1409</width>
+     <width>1492</width>
      <height>23</height>
     </rect>
    </property>

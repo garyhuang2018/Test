@@ -3,7 +3,7 @@
 import json
 import subprocess
 from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5 import QtWidgets, uic
+from PyQt5 import QtWidgets, uic, QtCore, QtGui
 from PyQt5.QtCore import QUrl, QRect
 from PyQt5.QtGui import QImage, QPixmap, QPainter
 from PyQt5.QtWebEngineWidgets import QWebEngineView
@@ -60,6 +60,7 @@ class CameraThread(QThread):
         return cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
     def stop(self):
+        print('stop camera')
         self.running = False
         self.cap.release()
 
@@ -101,13 +102,27 @@ class FactoryToolApp(QMainWindow):
         self.save_button.clicked.connect(self.save_test_points)
         self.load_button.clicked.connect(self.load_test_points)
         self.camera_thread = CameraThread(self)
-
+        self.camera_thread2 = CameraThread(self)
+        self.camera_thread2.frame_captured.connect(self.update_video_label2)
         self.camera_thread.frame_captured.connect(self.update_video_label)
         self.delete_light_points.clicked.connect(self.delete_points)
-        self.search_button.clicked.connect(self.search)
-        self.swipe_up_btn_2.clicked.connect(self.swipe_up)
-        self.swipe_down_btn_2.clicked.connect(self.swipe_down)
+        # self.search_button.clicked.connect(self.search)
+        self.swipe_up_btn.clicked.connect(self.swipe_up)
+        self.swipe_down_btn.clicked.connect(self.swipe_down)
+        self.cap = cv2.VideoCapture(0)
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self.update_frame)
+        self.timer.start(20)
 
+    def update_frame(self):
+        ret, frame = self.cap.read()
+        if ret:
+            # 转换颜色格式
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = frame.shape
+            bytes_per_line = ch * w
+            convert_to_Qt_format = QtGui.QImage(frame.data, w, h, bytes_per_line, QtGui.QImage.Format_RGB888)
+            self.video_label_2.setPixmap(QtGui.QPixmap.fromImage(convert_to_Qt_format))
     # def start_camera_thread(self):
     #     if not self.camera_thread.isRunning():
     #         self.camera_thread.start()
@@ -126,6 +141,9 @@ class FactoryToolApp(QMainWindow):
 
     def update_video_label(self, image):
         self.video_label.setPixmap(QPixmap.fromImage(image))
+
+    def update_video_label2(self, image):
+        self.video_label2.setPixmap(QPixmap.fromImage(image))
 
     def confirm_room(self):
         # 获取当前行数
@@ -261,11 +279,36 @@ class FactoryToolApp(QMainWindow):
     def update_right_contents(self):
         current_index = self.stacked_widget.currentIndex()
         if current_index == 1:
+            self.cap.release()
             # 创建一个 QWebEngineView 用于显示网页
             self.run_weditor()
-        if current_index == 2:
+        if current_index == 2:  # Add condition for index 3
+            self.cap.release()
             if not self.camera_thread.isRunning():
                 self.camera_thread.start()
+        if current_index == 3:
+            self.camera_thread.stop()
+            self.cap = cv2.VideoCapture(0)
+        if current_index == 4:
+            self.cap.release()
+            if self.camera_thread.isRunning():
+                self.camera_thread.stop()
+            self.hide_layout(self.phone_layout)
+            self.hide_layout(self.phone_layout2)
+
+    def show_layout(self, layout):
+        if layout is not None:
+            for i in range(layout.count()):
+                widget = layout.itemAt(i).widget()
+                if widget:
+                    widget.show()  # 重新显示小部件
+
+    def hide_layout(self, layout):
+        if layout is not None:
+            for i in range(layout.count()):
+                widget = layout.itemAt(i).widget()
+                if widget:
+                    widget.hide()  # 隐藏小部件
 
     def run_weditor(self):
         # Start the weditor thread
@@ -287,6 +330,8 @@ class FactoryToolApp(QMainWindow):
         self.stacked_widget.setCurrentIndex(set_index)
         self.update_nav_buttons()
         self.update_right_contents()
+        self.show_layout(self.phone_layout)
+        self.show_layout(self.phone_layout2)
 
     def mousePressEvent(self, event):
         if self.detecting:
@@ -379,14 +424,17 @@ class FactoryToolApp(QMainWindow):
                 self.light_list.addItem(f"{name}: ({x}, {y})")
 
     def closeEvent(self, event):
-        # Stop the camera thread
-        self.camera_thread.stop()
-        self.camera_thread.wait()
-        # Stop the weditor thread
-        self.weditor_thread.stop()
-        self.weditor_thread.wait()
-        # Accept the close event
-        event.accept()
+        try:
+            # Stop the camera thread
+            self.camera_thread.stop()
+            self.camera_thread.wait()
+            # Stop the weditor thread
+            self.weditor_thread.stop()
+            self.weditor_thread.wait()
+            # Accept the close event
+            event.accept()
+        except Exception as e:
+            print(e)
 
 
 if __name__ == '__main__':
