@@ -272,7 +272,7 @@
      </rect>
     </property>
     <property name="currentIndex">
-     <number>4</number>
+     <number>0</number>
     </property>
     <widget class="QWidget" name="page">
      <widget class="QFrame" name="right_frame">
@@ -599,10 +599,10 @@
      <widget class="QGroupBox" name="groupBox_6">
       <property name="geometry">
        <rect>
-        <x>350</x>
-        <y>220</y>
-        <width>120</width>
-        <height>80</height>
+        <x>9</x>
+        <y>19</y>
+        <width>741</width>
+        <height>671</height>
        </rect>
       </property>
       <property name="title">

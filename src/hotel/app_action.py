@@ -15,6 +15,32 @@ class App:
         except Exception:
             self.device_available = False
 
+    def get_text_from_resource_id(self, resourceId):
+        # 根据 resourceId 获取元素
+        element = self.device(resourceId=resourceId)
+
+        # 检查元素是否存在
+        if element.exists:
+            # 获取并打印文本内容
+            text_content = element.get_text()
+            print(f'Text content: {text_content}')
+            return text_content
+        else:
+            print('Element not found.')
+
+    def switch_phone_wifi(self, ssid, password):
+        # 打开设置页面
+        self.device.shell("am start -n com.android.settings/.Settings")
+        # 进入 Wi-Fi 设置页面
+        self.device.shell("input keyevent 20")  # 模拟点击事件，打开 Wi-Fi 设置
+
+    def config_gateway_wifi(self):
+        # (resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password").click()
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/cl_gw_config_net")
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/edit_wifi_password")
+        self.device(resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password").send_keys("gemvary1510")
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_complete")
+
     def get_info(self):
         return self.device.info
 
@@ -28,7 +54,10 @@ class App:
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/engineer_login")
 
     def add_gateway(self):
+        self.unlock()
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/iv_menu")
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_gateway_name")
+        self.click_element_if_texts_exists("添加网关")
         # self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_gateway_name", text="添加新网关").click()
 
     def choose_project_name(self, hotel_name):
@@ -225,6 +254,10 @@ class App:
         else:
             print(f"未找到元素: {xpath}")
 
+    def get_room_name(self):
+        room_name = self.get_text_from_resource_id("com.gemvary.vhpsmarthome:id/tv_title")
+        return room_name
+
 
 def device_locate(device):
     try:
@@ -280,9 +313,18 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-    resourceId = "com.gemvary.vhpsmarthome:id/tv_open"
-    d.light_on_control(1)
-    d.edit_light_name(1, "洗手间灯")
+    d.unlock()
+    d.click_element_if_texts_exists("定位")
+    # d.add_gateway()
+    # d.get_room_name()
+
+    # d.get_text_from_resource_id("com.gemvary.vhpsmarthome:id/tv_title")
+    # d.switch_phone_wifi("TPLINKE675","12345678")
+
+    # d.config_gateway_wifi()
+    # resourceId = "com.gemvary.vhpsmarthome:id/tv_open"
+    # d.light_on_control(1)
+    # d.edit_light_name(1, "洗手间灯")
 
     # d.swipe_down()
     # d.login("17881426510","888888")

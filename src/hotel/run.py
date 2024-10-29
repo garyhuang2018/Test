@@ -1,6 +1,7 @@
 # encoding= utf-8
 # __author__= gary
 import json
+import os
 import subprocess
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5 import QtWidgets, uic, QtCore, QtGui
@@ -9,11 +10,12 @@ from PyQt5.QtGui import QImage, QPixmap, QPainter
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWidgets import QMainWindow, QTableWidgetItem, QMessageBox, QComboBox, QInputDialog, QListWidget, \
     QFileDialog
-from hotel.app_action import App
+from app_action import App
 import cv2
 from PyQt5.QtCore import Qt, QTimer
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+from psutil import process_iter
 
 
 class WeditorThread(QThread):
@@ -22,8 +24,10 @@ class WeditorThread(QThread):
         self.process = None
 
     def run(self):
-        self.process = subprocess.Popen(['weditor'])
-        self.process.wait()  # Wait for the process to complete
+        # Check if weditor is already running
+        if not any('weditor' in proc.name() for proc in process_iter()):
+            self.process = subprocess.Popen(['weditor'])
+            self.process.wait()  # Wait for the process to complete
 
     def stop(self):
         if self.process:
@@ -70,7 +74,9 @@ class FactoryToolApp(QMainWindow):
         super().__init__()
         self.weditor_thread = WeditorThread(self)
         self.web_view = QWebEngineView()
-        uic.loadUi('resource/nav_panel.ui', self)
+        # Determine the path to the UI file
+        ui_file_path = os.path.join(os.path.dirname(__file__), 'nav_panel.ui')
+        uic.loadUi(ui_file_path, self)
         self.nav_buttons = []
         self.nav_buttons.append(self.step1)
         self.nav_buttons.append(self.step2)
@@ -153,7 +159,8 @@ class FactoryToolApp(QMainWindow):
         # self.result_table2.setItem(0, 0, QTableWidgetItem("右侧点击屏幕搜索设备，并将设备上电"))
 
         room_name = self.app_action.get_selected_room()
-
+        if room_name is None:
+            room_name = self.app_action.get_room_name()
         if room_name:
             # Create a confirmation dialog
             msg_box = QMessageBox()
@@ -170,6 +177,23 @@ class FactoryToolApp(QMainWindow):
                 # self.result_table_2.insertRow(row_count)
                 self.result_table_2.setItem(0, 1, QTableWidgetItem(msg))
                 self.result_table_2.setItem(0, 2, QTableWidgetItem('√'))
+
+            #  add gateway
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Question)
+            msg_box.setText(f"是否要为房间{room_name}添加网关？")
+            msg_box.setWindowTitle("确认选择")
+            msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+
+            # Show the dialog and get the user's response
+            response = msg_box.exec_()
+
+            row_count = self.result_table_2.rowCount()
+            if response == QMessageBox.Yes:
+                self.result_table_2.insertRow(row_count)
+                self.result_table_2.setItem(row_count, 0, QTableWidgetItem("小网关上电， 手机自动点击搜索"))
+                self.app_action.add_gateway()
+
 
     def run_clicked(self):
         if self.combo_box:
