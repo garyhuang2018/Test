@@ -9,7 +9,7 @@ from PyQt5.QtCore import QUrl, QRect
 from PyQt5.QtGui import QImage, QPixmap, QPainter
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtWidgets import QMainWindow, QTableWidgetItem, QMessageBox, QComboBox, QInputDialog, QListWidget, \
-    QFileDialog
+    QFileDialog, QDialog
 from app_action import App
 import cv2
 from PyQt5.QtCore import Qt, QTimer
@@ -93,7 +93,10 @@ class FactoryToolApp(QMainWindow):
         self.back_button.clicked.connect(self.back_clicked)
         self.run_button.clicked.connect(self.run_clicked)
         self.confirm_room_btn.clicked.connect(self.confirm_room)
+        self.locate_gateway_btn.clicked.connect(self.locate_gateway)
+        self.wifi_btn.clicked.connect(self.config_wifi)
         self.combo_box = None  # Initialize combo_box as None
+        self.room_combo_box = None  # Initialize combo_box as None
         #  Initialize camera data
         self.timer = None
         self.detecting = False
@@ -119,6 +122,7 @@ class FactoryToolApp(QMainWindow):
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(20)
+        self.result_dic = {}
 
     def update_frame(self):
         ret, frame = self.cap.read()
@@ -132,6 +136,27 @@ class FactoryToolApp(QMainWindow):
     # def start_camera_thread(self):
     #     if not self.camera_thread.isRunning():
     #         self.camera_thread.start()
+
+    def config_wifi(self):
+        print('config gateway wifi')
+        self.app_action.click_element_if_texts_exists("透传网关")
+        self.app_action.click_element_if_texts_exists("网关配网")
+        self.app_action.config_gateway_wifi()
+
+    def locate_gateway(self):
+        gateway_name = self.app_action.get_gateway_name()
+        print(gateway_name)
+        if gateway_name:
+            msg_text = f"找到网关{gateway_name},点击定位，网关指示灯是否闪烁？"
+            msg = f"网关{gateway_name}定位确认"
+            self.app_action.click_locate()
+            flag = self.show_msg_box(msg_text)
+            if flag:
+                self.result_dic['gateway_locate_result'] = " 网关" + gateway_name + "定位确认OK"
+                # 插入到结果表格
+                self.result_table_2.setItem(2, 1, QTableWidgetItem(msg))
+                self.result_table_2.setItem(2, 2, QTableWidgetItem('√'))
+                self.app_action.click_element_if_texts_exists(gateway_name)
 
     def swipe_down(self):
         self.app_action.swipe_down()
@@ -152,12 +177,6 @@ class FactoryToolApp(QMainWindow):
         self.video_label2.setPixmap(QPixmap.fromImage(image))
 
     def confirm_room(self):
-        # 获取当前行数
-        # row_count = self.result_table2.rowCount()
-
-        # 添加新行
-        # self.result_table2.setItem(0, 0, QTableWidgetItem("右侧点击屏幕搜索设备，并将设备上电"))
-
         room_name = self.app_action.get_selected_room()
         if room_name is None:
             room_name = self.app_action.get_room_name()
@@ -174,6 +193,9 @@ class FactoryToolApp(QMainWindow):
 
             if response == QMessageBox.Yes:
                 msg = '设置房间' + room_name
+                print(room_name)
+                self.result_dic['room_name'] = room_name
+                print(self.result_dic.get('room_name'))
                 # self.result_table_2.insertRow(row_count)
                 self.result_table_2.setItem(0, 1, QTableWidgetItem(msg))
                 self.result_table_2.setItem(0, 2, QTableWidgetItem('√'))
@@ -194,6 +216,15 @@ class FactoryToolApp(QMainWindow):
                 self.result_table_2.setItem(row_count, 0, QTableWidgetItem("小网关上电， 手机自动点击搜索"))
                 self.app_action.add_gateway()
 
+    def show_msg_box(self, text):
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Question)
+        msg_box.setText(text)
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        # Show the dialog and get the user's response
+        response = msg_box.exec_()
+        if response == QMessageBox.Yes:
+            return True
 
     def run_clicked(self):
         if self.combo_box:
@@ -230,9 +261,22 @@ class FactoryToolApp(QMainWindow):
                 self.combo_box.addItem(project)
             self.result_table.setItem(row_count + 1, 0, QTableWidgetItem("从手机获取项目，请选择需要测试的项目"))
             self.result_table.setCellWidget(row_count + 1, 1, self.combo_box)
+
             self.result_table.setItem(row_count + 1, 2, QTableWidgetItem('√'))
             self.combo_box.currentIndexChanged.connect(self.status_changed)
             self.combo_box.setEnabled(True)  # Enable combo_box for selection
+
+    def print_result_page_result(self):
+        # 获取当前行数
+        row_count = self.result_table_5.rowCount()
+        # 添加新行
+        self.result_table_5.insertRow(row_count)
+        text = str(self.result_dic.get('project_name'))
+        print('project', text)
+        self.result_table_5.setItem(0, 0, QTableWidgetItem(text))
+        print('room', self.result_dic.get('room_name'))
+        self.result_table_5.setItem(0, 1, QTableWidgetItem(self.result_dic.get('room_name')))
+        self.result_table_5.setItem(0, 2, QTableWidgetItem(self.result_dic.get('gateway_locate_result')))
 
     def pop_up_tips(self, title, text):
         # 创建提示框
@@ -269,7 +313,8 @@ class FactoryToolApp(QMainWindow):
             # 在此处添加确认后的操作
             self.app_action.choose_project_name(selected_project)
             self.combo_box.setEnabled(False)
-
+            self.result_dic['project_name'] = selected_project
+            print(self.result_dic.get('project_name'))
         else:
             print("用户取消选择")
 
@@ -300,12 +345,37 @@ class FactoryToolApp(QMainWindow):
         self.update_nav_buttons()
         self.update_right_contents()
 
+    def print_second_page(self):
+        texts = self.app_action.load_room_names()
+        self.room_combo_box = QComboBox()
+        # 连接信号和槽
+        for text in texts:
+            self.room_combo_box.addItem(text)
+        self.result_table_2.setCellWidget(0, 1, self.room_combo_box)
+        self.room_combo_box.currentIndexChanged.connect(self.room_selected)
+        self.result_table_2.setEnabled(True)  # Enable combo_box for selection
+
+    def room_selected(self, index):
+        print('room selected ')
+        room = self.room_combo_box.itemText(index)
+        print(self.room_combo_box.itemText(index))
+        # 创建并显示对话框
+        msg = QMessageBox()
+        msg.setWindowTitle("房间选择")
+        msg.setText(f"确定房间{room}！")
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)  # 添加“确定”按钮
+        response = msg.exec_()  # 显示弹出框
+        if response == QMessageBox.Ok:
+            self.app_action.click_element_if_texts_exists(room)
+            self.room_combo_box.setEnabled(False)
+
     def update_right_contents(self):
         current_index = self.stacked_widget.currentIndex()
         if current_index == 1:
+            self.print_second_page()
             self.cap.release()
             # 创建一个 QWebEngineView 用于显示网页
-            self.run_weditor()
+            # self.run_weditor()
         if current_index == 2:  # Add condition for index 3
             self.cap.release()
             if not self.camera_thread.isRunning():
@@ -319,6 +389,7 @@ class FactoryToolApp(QMainWindow):
                 self.camera_thread.stop()
             self.hide_layout(self.phone_layout)
             self.hide_layout(self.phone_layout2)
+            self.print_result_page_result()
 
     def show_layout(self, layout):
         if layout is not None:

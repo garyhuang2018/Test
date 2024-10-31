@@ -34,11 +34,11 @@ class App:
         # 进入 Wi-Fi 设置页面
         self.device.shell("input keyevent 20")  # 模拟点击事件，打开 Wi-Fi 设置
 
-    def config_gateway_wifi(self):
+    def config_gateway_wifi(self, wifi_keys):
         # (resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password").click()
-        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/cl_gw_config_net")
-        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/edit_wifi_password")
-        self.device(resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password").send_keys("gemvary1510")
+        # self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/cl_gw_config_net")
+        # self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/edit_wifi_password")
+        self.device(resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password").send_keys(wifi_keys)
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_complete")
 
     def get_info(self):
@@ -58,7 +58,6 @@ class App:
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/iv_menu")
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_gateway_name")
         self.click_element_if_texts_exists("添加网关")
-        # self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_gateway_name", text="添加新网关").click()
 
     def choose_project_name(self, hotel_name):
         self.device(resourceId="com.gemvary.vhpsmarthome:id/id_treenode_label", text=hotel_name).click()
@@ -258,6 +257,26 @@ class App:
         room_name = self.get_text_from_resource_id("com.gemvary.vhpsmarthome:id/tv_title")
         return room_name
 
+    def get_gateway_name(self):
+        element = self.device(resourceId = "com.gemvary.vhpsmarthome:id/tv_content")
+
+        if element.exists:
+            gateway_name = element.get_text()
+            return gateway_name
+
+    def click_locate(self):
+        self.click_element_if_texts_exists("定位")
+
+    def load_room_names(self):
+        # 获取所有具有特定 resource-id 的元素
+        elements = self.device(resourceId='com.gemvary.vhpsmarthome:id/tv_room_name')
+        texts = []
+        # 提取文本内容
+        for element in elements:
+            texts.append(element.get_text())
+        print(texts)
+        return texts
+
 
 def device_locate(device):
     try:
@@ -314,7 +333,10 @@ def get_logcat_logs():
 if __name__ == "__main__":
     d = App()
     d.unlock()
-    d.click_element_if_texts_exists("定位")
+    d.config_gateway_wifi("12345678")
+    # d.load_room_names()
+    # d.click_element_if_texts_exists("定位")
+    # print(d.get_gateway_name())
     # d.add_gateway()
     # d.get_room_name()
 
