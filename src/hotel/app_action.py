@@ -35,11 +35,16 @@ class App:
         self.device.shell("input keyevent 20")  # 模拟点击事件，打开 Wi-Fi 设置
 
     def config_gateway_wifi(self, wifi_keys):
-        # (resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password").click()
-        # self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/cl_gw_config_net")
-        # self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/edit_wifi_password")
-        self.device(resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password").send_keys(wifi_keys)
-        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_complete")
+        if self.device_available:
+            self.click_element_if_texts_exists("蓝牙透传网关")
+            self.click_element_if_texts_exists("网关配网")
+            element = self.device(resourceId="com.gemvary.vhpsmarthome:id/edit_wifi_password")
+            if element:
+                element.send_keys(wifi_keys)
+            else:
+                return
+            self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_complete")
+            return  True
 
     def get_info(self):
         return self.device.info
@@ -268,14 +273,45 @@ class App:
         self.click_element_if_texts_exists("定位")
 
     def load_room_names(self):
-        # 获取所有具有特定 resource-id 的元素
-        elements = self.device(resourceId='com.gemvary.vhpsmarthome:id/tv_room_name')
-        texts = []
-        # 提取文本内容
-        for element in elements:
-            texts.append(element.get_text())
-        print(texts)
-        return texts
+        if self.device_available:
+            # 获取所有具有特定 resource-id 的元素
+            elements = self.device(resourceId='com.gemvary.vhpsmarthome:id/tv_room_name')
+            texts = []
+            # 提取文本内容
+            for element in elements:
+                texts.append(element.get_text())
+            print(texts)
+            return texts
+
+    def get_log_data(self, pattern):
+        if self.device:
+            # 使用-d参数导出logcat日志
+            process = subprocess.Popen(['adb', 'logcat', '-d', '-s', 'wx'], stdout=subprocess.PIPE,
+                                       stderr=subprocess.PIPE)
+            stdout, stderr = process.communicate()  # 获取输出
+
+            if stderr:
+                print(f"Error: {stderr.decode('utf-8', errors='ignore')}")  # 错误输出
+                return []  # 如果有错误输出，返回空列表
+
+            log_data = stdout.decode('utf-8', errors='ignore')  # 解码输出为字符串
+
+            # 使用 re.findall() 找到所有匹配的内容
+            matches = re.findall(pattern, log_data)
+
+            # 输出所有找到的匹配内容
+            for match in matches:
+                print(f"Found match: {match}")
+            return matches
+        return []
+
+    def get_gateway_ip_address(self):
+        # 正则表达式模式，用于匹配 ip 的值
+        pattern = r"ip\s*=\s*([\d:]+)"
+        ip_addresses = self.get_log_data(pattern)
+        if ip_addresses:
+            return ip_addresses[0]
+        return
 
 
 def device_locate(device):
@@ -333,7 +369,9 @@ def get_logcat_logs():
 if __name__ == "__main__":
     d = App()
     d.unlock()
+
     d.config_gateway_wifi("12345678")
+    print(d.get_ip_address())
     # d.load_room_names()
     # d.click_element_if_texts_exists("定位")
     # print(d.get_gateway_name())

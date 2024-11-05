@@ -124,6 +124,17 @@ class FactoryToolApp(QMainWindow):
         self.timer.start(20)
         self.result_dic = {}
 
+    def insert_2page_row(self, value1, value2, value3):
+        # 获取当前行数
+        row = self.result_table_2.rowCount()
+        # 在表格中插入一行
+        self.result_table_2.insertRow(row)  # 使用 row_count 而非 row_count-1
+        print(row)
+        # 设置单元格的值
+        self.result_table_2.setItem(row, 0, QTableWidgetItem(value1))
+        self.result_table_2.setItem(row, 1, QTableWidgetItem(value2))
+        self.result_table_2.setItem(row, 2, QTableWidgetItem(value3))
+
     def update_frame(self):
         ret, frame = self.cap.read()
         if ret:
@@ -133,15 +144,39 @@ class FactoryToolApp(QMainWindow):
             bytes_per_line = ch * w
             convert_to_Qt_format = QtGui.QImage(frame.data, w, h, bytes_per_line, QtGui.QImage.Format_RGB888)
             self.video_label_2.setPixmap(QtGui.QPixmap.fromImage(convert_to_Qt_format))
-    # def start_camera_thread(self):
-    #     if not self.camera_thread.isRunning():
-    #         self.camera_thread.start()
 
     def config_wifi(self):
-        print('config gateway wifi')
-        self.app_action.click_element_if_texts_exists("透传网关")
-        self.app_action.click_element_if_texts_exists("网关配网")
-        self.app_action.config_gateway_wifi()
+
+        try:
+            with open("data/wifi.json", 'r') as f:
+                data = json.load(f)  # Correctly load the JSON data
+                wifi_keys = data["wifi_keys"]
+                flag = self.app_action.config_gateway_wifi(wifi_keys)
+                if flag:
+                    # Create a message box to inform the user
+                    msg_box = QMessageBox()
+                    msg_box.setIcon(QMessageBox.Information)
+                    msg_box.setWindowTitle("Please Wait")
+                    msg_box.setText("Attempting to obtain IP address. Please wait...")
+                    msg_box.setStandardButtons(QMessageBox.NoButton)
+                    msg_box.show()
+                    # Retry mechanism with increasing wait times
+                    wait_times = [10, 20, 30]  # Wait times in seconds
+                    for wait_time in wait_times:
+                        ip_address = self.app_action.get_gateway_ip_address()
+                        if ip_address:
+                            print(ip_address)
+                            self.insert_2page_row('已经获取网关ip地址如右边所示', ip_address, "√")
+                            break
+                        else:
+                            print(f"IP address not found, retrying in {wait_time} seconds...")
+                            QtCore.QThread.sleep(wait_time)
+                    else:
+                        print("Error: Unable to obtain IP address after multiple attempts.")
+                    # Close the message box
+                    msg_box.close()
+        except FileNotFoundError:
+            print("Error: The file 'data/wifi.json' does not exist.")
 
     def locate_gateway(self):
         gateway_name = self.app_action.get_gateway_name()
@@ -347,13 +382,13 @@ class FactoryToolApp(QMainWindow):
 
     def print_second_page(self):
         texts = self.app_action.load_room_names()
-        self.room_combo_box = QComboBox()
-        # 连接信号和槽
-        for text in texts:
-            self.room_combo_box.addItem(text)
-        self.result_table_2.setCellWidget(0, 1, self.room_combo_box)
-        self.room_combo_box.currentIndexChanged.connect(self.room_selected)
-        self.result_table_2.setEnabled(True)  # Enable combo_box for selection
+        if texts:
+            self.room_combo_box = QComboBox()
+            for text in texts:
+                self.room_combo_box.addItem(text)
+            self.result_table_2.setCellWidget(0, 1, self.room_combo_box)
+            self.room_combo_box.currentIndexChanged.connect(self.room_selected)
+            self.result_table_2.setEnabled(True)  # Enable combo_box for selection
 
     def room_selected(self, index):
         print('room selected ')
@@ -429,6 +464,8 @@ class FactoryToolApp(QMainWindow):
         self.show_layout(self.phone_layout2)
 
     def mousePressEvent(self, event):
+        if self.stacked_widget.currentIndex() != 2:
+            return
         if self.detecting:
             return
 
