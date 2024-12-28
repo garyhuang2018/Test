@@ -115,14 +115,18 @@ class FactoryToolApp(QMainWindow):
         self.camera_thread2.frame_captured.connect(self.update_video_label2)
         self.camera_thread.frame_captured.connect(self.update_video_label)
         self.delete_light_points.clicked.connect(self.delete_points)
+        self.add_device_btn.clicked.connect(self.add_device)
         # self.search_button.clicked.connect(self.search)
-        self.swipe_up_btn.clicked.connect(self.swipe_up)
-        self.swipe_down_btn.clicked.connect(self.swipe_down)
+        # self.swipe_up_btn.clicked.connect(self.swipe_up)
+        # self.swipe_down_btn.clicked.connect(self.swipe_down)
         self.cap = cv2.VideoCapture(0)
         self.timer = QtCore.QTimer(self)
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(20)
         self.result_dic = {}
+
+    def add_device(self):
+        self.app_action.add_light_switchs()
 
     def insert_2page_row(self, value1, value2, value3):
         # 获取当前行数
@@ -146,7 +150,6 @@ class FactoryToolApp(QMainWindow):
             self.video_label_2.setPixmap(QtGui.QPixmap.fromImage(convert_to_Qt_format))
 
     def config_wifi(self):
-
         try:
             with open("data/wifi.json", 'r') as f:
                 data = json.load(f)  # Correctly load the JSON data
@@ -460,8 +463,8 @@ class FactoryToolApp(QMainWindow):
         self.stacked_widget.setCurrentIndex(set_index)
         self.update_nav_buttons()
         self.update_right_contents()
-        self.show_layout(self.phone_layout)
-        self.show_layout(self.phone_layout2)
+        # self.show_layout(self.phone_layout)
+        # self.show_layout(self.phone_layout2)
 
     def mousePressEvent(self, event):
         if self.stacked_widget.currentIndex() != 2:
@@ -521,6 +524,9 @@ class FactoryToolApp(QMainWindow):
             brightness_change = current_brightness - initial_bright
             print(f"{name} 当前亮度：{current_brightness}，亮度变化：{brightness_change}")
 
+            if brightness_change < -10:
+                print(f"检测到 {name} 闪烁")
+
             if brightness_change > 3:
                 # self.status_label.setText(f"状态：检测到 {name} 红灯亮起")
                 print(f"检测到 {name} 红灯亮起")
@@ -561,8 +567,8 @@ class FactoryToolApp(QMainWindow):
             self.camera_thread.stop()
             self.camera_thread.wait()
             # Stop the weditor thread
-            self.weditor_thread.stop()
-            self.weditor_thread.wait()
+            # self.weditor_thread.stop()
+            # self.weditor_thread.wait()
             # Accept the close event
             event.accept()
         except Exception as e:
