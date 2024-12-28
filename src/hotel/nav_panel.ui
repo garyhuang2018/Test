@@ -409,11 +409,6 @@
          <string>1</string>
         </property>
        </row>
-       <row>
-        <property name="text">
-         <string>2</string>
-        </property>
-       </row>
        <column>
         <property name="text">
          <string>操作提示</string>
@@ -432,11 +427,6 @@
        <item row="0" column="0">
         <property name="text">
          <string>请在右侧界面选择房间信息后点击【已确定房间】按钮</string>
-        </property>
-       </item>
-       <item row="1" column="0">
-        <property name="text">
-         <string>请在右侧界面点击搜索，添加设备</string>
         </property>
        </item>
       </widget>
@@ -477,6 +467,19 @@
        </property>
        <property name="text">
         <string>网关配网</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="add_device_btn">
+       <property name="geometry">
+        <rect>
+         <x>590</x>
+         <y>160</y>
+         <width>75</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>添加灯光</string>
        </property>
       </widget>
      </widget>
@@ -599,6 +602,50 @@
        <string>设备控制</string>
       </property>
      </widget>
+     <widget class="QTableWidget" name="result_table_3">
+      <property name="geometry">
+       <rect>
+        <x>700</x>
+        <y>80</y>
+        <width>661</width>
+        <height>221</height>
+       </rect>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>661</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <attribute name="verticalHeaderDefaultSectionSize">
+       <number>50</number>
+      </attribute>
+      <row>
+       <property name="text">
+        <string>1</string>
+       </property>
+      </row>
+      <column>
+       <property name="text">
+        <string>操作提示</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>运行日志</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>结果</string>
+       </property>
+      </column>
+      <item row="0" column="0">
+       <property name="text">
+        <string>请在右侧界面选择房间信息后点击【已确定房间】按钮</string>
+       </property>
+      </item>
+     </widget>
     </widget>
     <widget class="QWidget" name="page_4">
      <widget class="QWidget" name="horizontalLayoutWidget_3">
@@ -661,58 +708,6 @@
       </widget>
      </widget>
     </widget>
-   </widget>
-   <widget class="QWidget" name="horizontalLayoutWidget_2">
-    <property name="geometry">
-     <rect>
-      <x>1030</x>
-      <y>30</y>
-      <width>321</width>
-      <height>661</height>
-     </rect>
-    </property>
-    <layout class="QHBoxLayout" name="phone_layout"/>
-   </widget>
-   <widget class="QWidget" name="verticalLayoutWidget_2">
-    <property name="geometry">
-     <rect>
-      <x>1370</x>
-      <y>30</y>
-      <width>101</width>
-      <height>291</height>
-     </rect>
-    </property>
-    <layout class="QVBoxLayout" name="phone_layout2">
-     <item>
-      <widget class="QLabel" name="label">
-       <property name="font">
-        <font>
-         <family>微软雅黑</family>
-         <weight>75</weight>
-         <bold>true</bold>
-        </font>
-       </property>
-       <property name="text">
-        <string>双击鼠标点击
-右击界面刷新</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="swipe_up_btn">
-       <property name="text">
-        <string>向上滑动</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="swipe_down_btn">
-       <property name="text">
-        <string>向下滑动</string>
-       </property>
-      </widget>
-     </item>
-    </layout>
    </widget>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
