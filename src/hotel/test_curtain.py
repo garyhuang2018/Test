@@ -1,14 +1,13 @@
 
 # encoding= utf-8
 # __author__= gary
-import datetime
 from time import sleep
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.firefox.options import Options
 
 class UpgradeVdp:
     def __init__(self, username=None, password=None):
@@ -70,19 +69,29 @@ class UpgradeVdp:
             # 点击第22个设备列表项
             browser.find_element(By.CSS_SELECTOR, ".list-item:nth-child(22) .device-list").click()
 
-            # 点击开关按钮
-            browser.find_element(By.CSS_SELECTOR, "#pane-all .wrap:nth-child(4) .el-switch__core").click()
+            # 点击窗帘开关按钮
+            browser.find_element(By.ID, "tab-curtains").click()
+            browser.find_element(By.CSS_SELECTOR, "#pane-curtains .el-switch__core").click()
 
         except Exception as e:
             print(f"错误发生: {e}")
             print("跳过此操作，继续执行下一个...")
 
+
 def run_script(username, password, interval, repetitions):
     for i in range(repetitions):
         print(f"执行第 {i+1} 次操作...")
 
+        # 指定 Firefox 浏览器的路径（修改为实际的路径）
+        firefox_binary_path = r"C:\Program Files\Mozilla Firefox\firefox.exe"  # Windows 示例
+        # firefox_binary_path = "/usr/bin/firefox"  # Linux 示例
+        # firefox_binary_path = "/Applications/Firefox.app/Contents/MacOS/firefox"  # macOS 示例
+
+        options = Options()
+        options.binary_location = firefox_binary_path
+
         # 每次操作前重新启动浏览器实例
-        browser = webdriver.Firefox()
+        browser = webdriver.Firefox(options=options)
 
         try:
             url = 'http://hotel.gemvary.cn:8090/#/login'  # 替换为实际的上传页面 URL
