@@ -1,4 +1,3 @@
-
 # encoding= utf-8
 # __author__= gary
 from time import sleep
@@ -8,6 +7,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.firefox.options import Options
+
 
 class UpgradeVdp:
     def __init__(self, username=None, password=None):
@@ -56,19 +56,26 @@ class UpgradeVdp:
 
             sleep(1)
 
-            # 点击“今日房态”
+            # 点击"今日房态"
             browser.find_element(By.LINK_TEXT, "今日房态").click()
 
             sleep(1)
 
-            # 鼠标悬停到“授权记录”链接
+            # 鼠标悬停到"授权记录"链接
             element = browser.find_element(By.LINK_TEXT, "授权记录")
             actions = ActionChains(browser)
             actions.move_to_element(element).perform()
 
             # 点击第22个设备列表项
-            browser.find_element(By.CSS_SELECTOR, ".list-item:nth-child(22) .device-list").click()
+            browser.find_element(By.CSS_SELECTOR, ".list-item:nth-child(8) .device-list").click()
 
+            # # 18 | click | id=tab-light |
+            # browser.find_element(By.ID, "tab-light").click()
+            # # 19 | click | css=#pane-light .wrap:nth-child(1) .el-switch__core |
+            # browser.find_element(By.CSS_SELECTOR, "#pane-light .wrap:nth-child(1) .el-switch__core").click()
+            # sleep(3)
+            # # 23 | click | css=#pane-light .wrap:nth-child(1) .el-switch__core |
+            # browser.find_element(By.CSS_SELECTOR, "#pane-light .wrap:nth-child(1) .el-switch__core").click()
             # 点击窗帘开关按钮
             browser.find_element(By.ID, "tab-curtains").click()
             browser.find_element(By.CSS_SELECTOR, "#pane-curtains .el-switch__core").click()
@@ -78,7 +85,7 @@ class UpgradeVdp:
             print("跳过此操作，继续执行下一个...")
 
 
-def run_script(username, password, interval, repetitions):
+def run_script(username, password, interval, repetitions, headless=True):
     for i in range(repetitions):
         print(f"执行第 {i+1} 次操作...")
 
@@ -89,6 +96,7 @@ def run_script(username, password, interval, repetitions):
 
         options = Options()
         options.binary_location = firefox_binary_path
+        options.headless = headless  # 设置是否隐藏浏览器窗口
 
         # 每次操作前重新启动浏览器实例
         browser = webdriver.Firefox(options=options)
@@ -118,6 +126,7 @@ if __name__ == '__main__':
     password = '888888'
     interval = int(input("请输入每次操作间隔时间（秒）: "))
     repetitions = int(input("请输入执行次数: "))
+    headless = input("是否隐藏浏览器窗口? (y/n): ").strip().lower() == 'y'
 
     # 执行脚本
-    run_script(username, password, interval, repetitions)
+    run_script(username, password, interval, repetitions, headless)
