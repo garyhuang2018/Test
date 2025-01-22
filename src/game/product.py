@@ -39,7 +39,33 @@ class Product:
                 cursor.close()
                 connection.close()
 
+    @staticmethod
+    def load_records():
+        try:
+            connection = pymysql.connect(
+                host='192.192.10.10',
+                port=3306,
+                user='root',  # 数据库用户名
+                passwd='root',  # 密码
+                charset='utf8',
+                db='test_tool'
+            )
+            with connection.cursor() as cursor:
+                sql = "SELECT model, name, record  FROM records"
+                cursor.execute(sql)
+                records = cursor.fetchall()
+
+                # Populate the combo box with names
+                for record in records:
+                    print(record)
+
+                # # Store records for later use
+                # self.records = {record['name']: record['info'] for record in records}
+        except Exception as e:
+            print(e)
+
 
 if __name__ == "__main__":
     # product = Product("CS-86TG", "调光开关", "还在测试中")
-    Product.insert_product("CS-86TG", "调光开关", "testing")
+    # Product.insert_product("CS-86TG", "调光开关", "testing")
+    Product.load_records()
