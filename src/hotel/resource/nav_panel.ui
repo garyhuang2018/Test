@@ -272,7 +272,7 @@
      </rect>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="page">
      <widget class="QFrame" name="right_frame">
@@ -450,7 +450,20 @@
         </rect>
        </property>
        <property name="text">
-        <string>已确定房间</string>
+        <string>确定房间</string>
+       </property>
+      </widget>
+      <widget class="QPushButton" name="gateway_btn">
+       <property name="geometry">
+        <rect>
+         <x>590</x>
+         <y>80</y>
+         <width>75</width>
+         <height>23</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>网关定位</string>
        </property>
       </widget>
      </widget>
@@ -678,6 +691,7 @@
     <property name="title">
      <string>设置</string>
     </property>
+    <addaction name="separator"/>
     <addaction name="actionOpen"/>
    </widget>
    <widget class="QMenu" name="help">
@@ -690,7 +704,7 @@
   </widget>
   <action name="actionOpen">
    <property name="text">
-    <string>Open</string>
+    <string>打开订单信息</string>
    </property>
   </action>
  </widget>

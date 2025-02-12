@@ -1,5 +1,7 @@
+import os
 import sys
 import pandas as pd
+from PyQt5 import uic
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableWidgetItem
 from PyQt5.uic import loadUi
 
@@ -8,7 +10,9 @@ class PanelPreDebugTool(QMainWindow):
     def __init__(self):
         super().__init__()
         # 加载 UI 文件
-        loadUi('panel.ui', self)
+        # Determine the path to the UI file
+        ui_file_path = os.path.join(os.path.dirname(__file__), 'panel.ui')
+        uic.loadUi(ui_file_path, self)
 
         # 初始化侧边栏点击事件
         self.sidebar_list.itemClicked.connect(self.show_page)
