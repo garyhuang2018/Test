@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>1163</width>
+    <height>595</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,6 +17,18 @@
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
      <widget class="QListWidget" name="sidebar_list">
+      <property name="minimumSize">
+       <size>
+        <width>200</width>
+        <height>0</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>200</width>
+        <height>16777215</height>
+       </size>
+      </property>
       <item>
        <property name="text">
         <string>获取订单交付信息</string>
@@ -42,6 +54,13 @@
          <widget class="QPushButton" name="import_button">
           <property name="text">
            <string>导入订单信息</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="select_devices_button">
+          <property name="text">
+           <string>选择预调试设备</string>
           </property>
          </widget>
         </item>
@@ -81,8 +100,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
-     <height>26</height>
+     <width>1163</width>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuFile">

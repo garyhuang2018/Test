@@ -21,6 +21,9 @@ class PanelPreDebugTool(QMainWindow):
         # 初始化导入按钮事件
         self.import_button.clicked.connect(self.import_order_info)
 
+        # 初始化选择预调试设备按钮事件
+        self.select_devices_button.clicked.connect(self.on_select_devices_clicked)
+
         # 存储订单信息
         self.order_info = None
 
@@ -47,19 +50,18 @@ class PanelPreDebugTool(QMainWindow):
         if self.order_info is not None:
             # 获取数据的前几行
             preview_df = self.order_info.head()
-            # 设置表格的行数和列数，增加一列用于复选框
+
+            # 设置表格的行数和列数，在最前面增加一列用于复选框
             rows, columns = preview_df.shape
             self.tableWidget.setRowCount(rows)
             self.tableWidget.setColumnCount(columns + 1)
-            # 设置表格的列标题，添加“选择”列
-            headers = list(preview_df.columns) + ["选择"]
+            # 设置表格的列标题，将“选择”列放在最前面
+            headers = ["选择"] + list(preview_df.columns)
             self.tableWidget.setHorizontalHeaderLabels(headers)
+
             # 填充表格数据
             for row in range(rows):
-                for col in range(columns):
-                    item = str(preview_df.iloc[row, col])
-                    self.tableWidget.setItem(row, col, QTableWidgetItem(item))
-                # 添加复选框到最后一列
+                # 添加复选框到第一列
                 checkbox = QCheckBox()
                 widget = QWidget()
                 layout = QHBoxLayout(widget)
@@ -67,7 +69,34 @@ class PanelPreDebugTool(QMainWindow):
                 layout.setAlignment(checkbox, Qt.AlignCenter)
                 layout.setContentsMargins(0, 0, 0, 0)
                 widget.setLayout(layout)
-                self.tableWidget.setCellWidget(row, columns, widget)
+                self.tableWidget.setCellWidget(row, 0, widget)
+                for col in range(columns):
+                    item = str(preview_df.iloc[row, col])
+                    self.tableWidget.setItem(row, col + 1, QTableWidgetItem(item))
+
+    def get_selected_rows(self):
+        selected_data = []
+        rows = self.tableWidget.rowCount()
+        columns = self.tableWidget.columnCount() - 1  # 排除复选框列
+        for row in range(rows):
+            checkbox_widget = self.tableWidget.cellWidget(row, 0)
+            checkbox = checkbox_widget.findChild(QCheckBox)
+            if checkbox.isChecked():
+                row_data = []
+                for col in range(1, columns + 1):
+                    item = self.tableWidget.item(row, col)
+                    row_data.append(item.text())
+                selected_data.append(row_data)
+        return selected_data
+
+    def on_select_devices_clicked(self):
+        selected_rows = self.get_selected_rows()
+        if selected_rows:
+            print("用户选择的预调试设备信息：")
+            for row in selected_rows:
+                print(row)
+        else:
+            self.statusBar().showMessage("未选择任何设备，请勾选需要预调试的设备。")
 
 
 if __name__ == "__main__":
