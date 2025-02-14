@@ -75,8 +75,53 @@ def fetch_hotel_list(username, password):
     return None
 
 
+def fetch_hotel_rooms(username, password, hotel_code):
+    # 假设的酒店系统登录接口 URL
+    login_url = "https://hotel.gemvary.cn/hotelcloud/sysprojectUser/login"
+    # 登录参数
+    login_params = {
+        "username": username,
+        "password": password
+    }
+    # 调用 hotel_login 函数获取 cookies
+    cookies = hotel_login(login_url, login_params)
+    if cookies:
+        print("登录成功，cookies:", cookies)
+        # 将 cookies 字典转换为字符串
+        cookies_str = "; ".join([f"{key}={value}" for key, value in cookies.items()])
+        # 房间信息请求的 URL
+        request_url = f"http://hotel.gemvary.cn:8090/hotelcloud/panel/roomDeviceStatus?hotelCode={hotel_code}"
+        print(request_url)
+        headers = {
+            "Cookie": cookies_str
+        }
+        print(headers)
+        # 假设的请求参数
+        params = {
+            "unitno": "",
+            "floorNo": "",
+            "roomno": "",
+            "spaceId": "",
+            "status": 10,
+            "hotelPlatformType": 0
+        }
+        response = requests.post(url=request_url, headers=headers, json=params)
+        try:
+            room_list = response.json()
+            # 提取 roomNo 列表
+            room_no_list = [room.get('roomNo') for room in room_list.get('data', [])]
+            return room_no_list
+        except ValueError:
+            print("响应不是有效的 JSON 格式:", response.text)
+            return None
+    print("登录失败，无法获取房间信息")
+    return None
+
+
 # 示例调用
 if __name__ == "__main__":
-    result = fetch_hotel_list("13925716872", "21218cca77804d2ba1922c33e0151105")
-    if result:
-        print(result)
+    username = "13925716872"
+    password = "21218cca77804d2ba1922c33e0151105"
+    hotel_code = "10086"
+    room_list1 = fetch_hotel_rooms(username, password, hotel_code)
+    print(room_list1)

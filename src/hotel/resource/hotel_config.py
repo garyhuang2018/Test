@@ -5,7 +5,7 @@ import pandas as pd
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QCheckBox, QWidget, QHBoxLayout, QMessageBox, QDialog, QVBoxLayout, QComboBox, QPushButton
-from api.server_request import fetch_hotel_list
+from api.server_request import fetch_hotel_list, fetch_hotel_rooms
 
 
 def extract_project_name(file_name):
@@ -113,10 +113,15 @@ class PanelPreDebugTool(QMainWindow):
                 if hasattr(self, 'username') and hasattr(self, 'password'):
                     hotel_list = fetch_hotel_list(self.username, self.password)
                     if hotel_list:
+                        print(hotel_list)
                         # 进行项目名称匹配
                         selected_hotel = match_project_with_hotels(project_name, hotel_list)
                         if selected_hotel:
+
                             print(f"最终选择的酒店: {selected_hotel['hotelName']}")
+                            print(f"选择酒店的代码: {selected_hotel['hotelCode']}")
+                            room_no_list = fetch_hotel_rooms(self.username, self.password, selected_hotel['hotelCode'] )
+                            print(room_no_list)
                         else:
                             print("未选择有效酒店。")
             except Exception as e:
