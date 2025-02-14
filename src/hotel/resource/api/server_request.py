@@ -75,7 +75,7 @@ def fetch_hotel_list(username, password):
     return None
 
 
-def fetch_hotel_rooms(username, password, hotel_code):
+def fetch_hotel_rooms_no(username, password, hotel_code):
     # 假设的酒店系统登录接口 URL
     login_url = "https://hotel.gemvary.cn/hotelcloud/sysprojectUser/login"
     # 登录参数
@@ -123,5 +123,5 @@ if __name__ == "__main__":
     username = "13925716872"
     password = "21218cca77804d2ba1922c33e0151105"
     hotel_code = "10086"
-    room_list1 = fetch_hotel_rooms(username, password, hotel_code)
+    room_list1 = fetch_hotel_rooms_no(username, password, hotel_code)
     print(room_list1)

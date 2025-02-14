@@ -4,8 +4,11 @@ import sys
 import pandas as pd
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QCheckBox, QWidget, QHBoxLayout, QMessageBox, QDialog, QVBoxLayout, QComboBox, QPushButton
-from api.server_request import fetch_hotel_list, fetch_hotel_rooms
+from PyQt5.QtWidgets import (
+    QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QCheckBox, QWidget,
+    QHBoxLayout, QMessageBox, QDialog, QVBoxLayout, QComboBox, QPushButton
+)
+from api.server_request import fetch_hotel_list, fetch_hotel_rooms_no
 
 
 def extract_project_name(file_name):
@@ -55,6 +58,28 @@ def show_hotel_selection_dialog(hotel_names):
 
     combo_box = QComboBox()
     combo_box.addItems(hotel_names)
+    layout.addWidget(combo_box)
+
+    ok_button = QPushButton("确定")
+    ok_button.clicked.connect(dialog.accept)
+    layout.addWidget(ok_button)
+
+    dialog.setLayout(layout)
+    if dialog.exec_() == QDialog.Accepted:
+        return combo_box.currentText()
+    return None
+
+
+def show_room_selection_dialog(room_no_list):
+
+    dialog = QDialog()
+    # 设置对话框的最小宽度，你可以根据需要调整这个值
+    dialog.setMinimumWidth(200)
+    dialog.setWindowTitle("选择要调试的房间")
+    layout = QVBoxLayout()
+
+    combo_box = QComboBox()
+    combo_box.addItems(room_no_list)
     layout.addWidget(combo_box)
 
     ok_button = QPushButton("确定")
@@ -117,11 +142,22 @@ class PanelPreDebugTool(QMainWindow):
                         # 进行项目名称匹配
                         selected_hotel = match_project_with_hotels(project_name, hotel_list)
                         if selected_hotel:
-
                             print(f"最终选择的酒店: {selected_hotel['hotelName']}")
                             print(f"选择酒店的代码: {selected_hotel['hotelCode']}")
-                            room_no_list = fetch_hotel_rooms(self.username, self.password, selected_hotel['hotelCode'] )
+                            room_no_list = fetch_hotel_rooms_no(self.username, self.password, selected_hotel['hotelCode'])
                             print(room_no_list)
+                            if room_no_list:
+                                selected_room = show_room_selection_dialog(room_no_list)
+                                if selected_room:
+                                    print(f"用户选择要调试的房间: {selected_room}")
+                                    # 跳转到下一个 stack 页面
+                                    self.switch_to_next_stack()
+                                    # 更新 statusbar 信息
+                                    self.update_statusbar(project_name, selected_room)
+                                else:
+                                    print("用户未选择房间。")
+                            else:
+                                print("未获取到房间号列表。")
                         else:
                             print("未选择有效酒店。")
             except Exception as e:
@@ -198,6 +234,19 @@ class PanelPreDebugTool(QMainWindow):
                 print("配置文件中未找到有效的账户名或密码。")
         except FileNotFoundError:
             print("未找到配置文件 'config/config.txt'。")
+
+    def switch_to_next_stack(self):
+        # 获取当前 stack 的索引
+        current_index = self.stacked_widget.currentIndex()
+        # 计算下一个索引
+        next_index = (current_index + 1) % self.stacked_widget.count()
+        # 切换到下一个页面
+        self.stacked_widget.setCurrentIndex(next_index)
+
+    def update_statusbar(self, project_name, selected_room):
+        # 更新 statusbar 信息
+        status_message = f"项目: {project_name}, 选定房间: {selected_room}"
+        self.statusBar().showMessage(status_message)
 
 
 if __name__ == "__main__":
