@@ -1,0 +1,33 @@
+# encoding= utf-8
+#__author__= gary
+import hmac
+import hashlib
+
+# 假设 API_KEY 和 APP_SECRET 已经定义
+import requests
+
+API_KEY = "c80571ae360349c5a838a719838781f0"
+APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee".encode('utf-8')
+
+# 计算 HMAC-SHA256 哈希
+message = "GET/pcs/templates/vh-template/412".encode('utf-8')
+hash_object = hmac.new(APP_SECRET, message, hashlib.sha256)
+hex_dig = hash_object.hexdigest()
+
+# 格式化字符串
+result = f"key={API_KEY};sign={hex_dig}"
+
+print(result)
+
+url = "https://api.gemvary.cn/pcs/templates/vh-template/412"
+
+payload = {}
+headers = {
+  'X-API-KEY': 'key=c80571ae360349c5a838a719838781f0;sign=29113fed5442edf76f1be3f0f1ab173b7788b0e0122139b6b8b8c33937f65088',
+  'Content-Type': 'application/json',
+  'Authorization': 'Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJKb1l3eVpNdnpiVDVrMW5uWTNGWm9pUmJfbk9UZmZxNEZ2MzdrMDJrUDBZIn0.eyJleHAiOjE3Mzk4NDE1NDIsImlhdCI6MTczOTc1NTE0MiwianRpIjoiODA5MjMzNzgtM2UwMC00NGQ4LTg2MmYtOWMzNGE4MDMyNzU4IiwiaXNzIjoiaHR0cHM6Ly8xMjcuMC4wLjE6OTAxMC9yZWFsbXMvZ2VtdmFyeS1lbmdpbmVlciIsImF1ZCI6ImFjY291bnQiLCJzdWIiOiIxNTdhZWIyYS0wYTgxLTRjNTctOGVkNi01NTY0NDE0YTA1OGEiLCJ0eXAiOiJCZWFyZXIiLCJhenAiOiJlbmdpbmVlci1jbGllbnQiLCJzZXNzaW9uX3N0YXRlIjoiNWQzNWVjM2QtODFmNC00ZTQwLTgyYjQtNzUxN2Y5YjUxNDZkIiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsInVtYV9hdXRob3JpemF0aW9uIiwiZGVmYXVsdC1yb2xlcy1nZW12YXJ5LWVuZ2luZWVyIl19LCJyZXNvdXJjZV9hY2Nlc3MiOnsiYWNjb3VudCI6eyJyb2xlcyI6WyJtYW5hZ2UtYWNjb3VudCIsIm1hbmFnZS1hY2NvdW50LWxpbmtzIiwidmlldy1wcm9maWxlIl19fSwic2NvcGUiOiJwcm9maWxlIGVtYWlsIiwiZW1haWxfdmVyaWZpZWQiOmZhbHNlLCJuaWNrbmFtZSI6IiIsInByZWZlcnJlZF91c2VybmFtZSI6IjEzOTI1NzE2ODcyIn0.NaP-5XJwCvmalVHpaH-cJQ-IOV0bETC7l_BIGyvnULoLrtDlt9scFB7T3J2Woaid6Kp5C9HkYlb06MivxqxUGkGUdGrBau7neytJcDHS6Mj19d_yHgaJFp4NkDbA1n80lu2T_do9CtXX73W0G01pjiOlqZBexUuSoBLKxzOUIOiQn_RzjiXTKmMO2T7APW-mKwJmyvVeA3IGcbQCerpN1x69ryqngKvCCDt6Tzo9lRnLg6zX-M-UeQAFSThxxmlX5NYJk_emZiQj8K20gIdrCjVVOuFQckeIT2NMEui4u7XGkNEQptq7npnqWcILL-K-xB9zJ81oZRDNGVkreuL-Jw'
+}
+
+response = requests.request("GET", url, headers=headers, data=payload)
+
+print(response.text)
