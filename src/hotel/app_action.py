@@ -168,13 +168,14 @@ class App:
             sleep(1)  # 等待 1 秒钟以确保屏幕完全亮起
 
     def click_element_if_resource_exists(self, resource_Id):
-        # 检查元素是否存在
-        if self.device(resourceId=resource_Id):
-            self.device(resourceId=resource_Id).click()
-            print(f"Clicked on element with resourceId: {resource_Id}")
-        else:
-            print(f"Element with xpath: {resource_Id} does not exist.")
-            return
+        if self.device_available:
+            # 检查元素是否存在
+            if self.device(resourceId=resource_Id):
+                self.device(resourceId=resource_Id).click()
+                print(f"Clicked on element with resourceId: {resource_Id}")
+            else:
+                print(f"Element with xpath: {resource_Id} does not exist.")
+                return
 
     def click_element_if_exists(self, xpath):
         # 检查元素是否存在
@@ -185,25 +186,27 @@ class App:
             print(f"Element with xpath: {xpath} does not exist.")
 
     def click_element_if_texts_exists(self, text):
-        # 检查元素是否存在
-        if self.device(text=text):
-            # 查找具有指定文本的所有元素
-            elements = self.device(text=text)
+        if self.device_available:
+            # 检查元素是否存在
+            if self.device(text=text):
+                # 查找具有指定文本的所有元素
+                elements = self.device(text=text)
 
-            # 遍历并依次点击每个元素
-            for index in range(len(elements)):
-                # 确保元素可点击
-                if elements[index].exists:
-                    elements[index].click()  # 点击元素
-                    print(f"点击第 {index + 1} 个元素")
-                    sleep(1)  # 暂停1秒以确保操作完成
-        else:
-            print(f"Element with text: {text} does not exist.")
+                # 遍历并依次点击每个元素
+                for index in range(len(elements)):
+                    # 确保元素可点击
+                    if elements[index].exists:
+                        elements[index].click()  # 点击元素
+                        print(f"点击第 {index + 1} 个元素")
+                        sleep(1)  # 暂停1秒以确保操作完成
+            else:
+                print(f"Element with text: {text} does not exist.")
 
     def add_light_switchs(self):
         self.unlock()
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/iv_menu")
-        self.device(text="添加设备").click()
+        self.click_element_if_texts_exists("添加设备")
+        # self.device(text="添加设备").click()
         sleep(0.5)
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_search")
 
@@ -313,6 +316,101 @@ class App:
             return ip_addresses[0]
         return
 
+    def click_back_icon(self):
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/iv_back")
+
+    def get_app_version(self):
+        # 获取应用信息
+        package_name = 'com.gemvary.vhpsmarthome'  # 替换为目标应用的包名
+        app_info = self.device.app_info(package_name)
+        version = app_info['versionName']
+        # 打印应用版本信息
+        print(f"应用版本: {app_info['versionName']}")
+        return version
+
+    def apply_template(self, template_name,  device_name):
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/iv_menu")
+        self.device(text="模 板").click()
+        self.device.xpath('//android.widget.RelativeLayout/android.view.ViewGroup[1]/android.widget.ImageView[2]').click()
+        self.swipe_and_click_text(template_name)
+        self.device(resourceId="android:id/button1").click()
+        sleep(1)
+        self.click_back_icon()
+        # self.add_light_switchs()
+        # self.device(text="添加设备").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/iv_show_repeat").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_search").click()
+        # self.device.xpath(
+        #     '//*[@resource-id="com.gemvary.vhpsmarthome:id/recyclerView"]/android.view.ViewGroup[2]/android.widget.Button[1]').click()
+        # self.device.xpath(
+        #     '//*[@resource-id="com.gemvary.vhpsmarthome:id/recyclerView"]/android.view.ViewGroup[2]/android.widget.Button[2]').click()
+        # self.device.xpath(
+        #     '//*[@resource-id="com.gemvary.vhpsmarthome:id/recyclerView"]/android.view.ViewGroup[1]/android.widget.Button[1]').click()
+        # self.device.xpath(
+        #     '//*[@resource-id="com.gemvary.vhpsmarthome:id/recyclerView"]/android.view.ViewGroup[1]/android.widget.Button[1]').click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/btn_add", text="加入").click()
+        # self.device(resourceId="android:id/text1", text=series_name).click()
+        # self.device(resourceId="android:id/text1", text=device_name).click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/btn_next").click()
+        # self.device.xpath(
+        #     '//*[@resource-id="com.gemvary.vhpsmarthome:id/recyclerView"]/android.view.ViewGroup[2]/android.widget.Button[3]').click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/iv_replace_self.device_add").click()
+        # self.device(text="6场景2继电器-20A").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_replace").click()
+        # self.device(resourceId="android:id/button1").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/btn_replace").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/iv_replace_self.device_add").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/cl").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_replace").click()
+        # self.device(resourceId="android:id/button1").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/iv_back").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/iv_back").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/iv_menu").click()
+        # self.device(text="重置设备配置").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_confirm").click()
+        # self.device.xpath('//android.widget.FrameLayout').click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/iv_menu").click()
+        # self.device(text="自动配置设备").click()
+        # self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_confirm").click()
+
+    def add_and_replace_devices(self, series_name, device_name):
+        self.add_light_switchs()
+        sleep(2)  # 等待设备上报
+        self.click_element_if_texts_exists("加入")
+        self.click_element_if_texts_exists(series_name)
+        self.swipe_and_click_text(device_name)
+        self.click_element_if_texts_exists("下一步")
+        # self.click_element_if_texts_exists("添加")
+        # self.click_element_if_texts_exists("完成")
+
+    def swipe_and_click_text(self, target_text, max_swipes=3, swipe_interval=1):
+        """
+        一边下滑屏幕一边匹配文本，找到匹配文本后点击
+        :param device: 已连接的设备对象
+        :param target_text: 要匹配的文本
+        :param max_swipes: 最大滑动次数，避免无限滑动，默认为 10
+        :param swipe_interval: 每次滑动后的等待时间（秒），默认为 1
+        :return: 如果找到并点击返回 True，否则返回 False
+        """
+        swipe_count = 0
+        while swipe_count < max_swipes:
+            # 查找匹配文本的元素
+            element = self.device(text=target_text)
+            if element.exists:
+                # 找到匹配元素，点击它
+                element.click()
+                print(f"找到文本 '{target_text}' 并点击")
+                return True
+            else:
+                # 未找到匹配元素，向下滑动屏幕
+                self.swipe_up()
+                swipe_count += 1
+                print(f"未找到文本，进行第 {swipe_count} 次滑动")
+                sleep(swipe_interval)  # 等待指定时间，让页面加载
+
+        print(f"滑动 {max_swipes} 次后仍未找到文本 '{target_text}'")
+        return False
+
 
 def device_locate(device):
     try:
@@ -368,10 +466,52 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-    d.unlock()
+    # d.swipe_and_click_text("好")
+    # d.apply_template("好", "GP系列")
+    d.add_and_replace_devices("GP系列", "6场景2继电器")
+    try:
+        # 获取屏幕尺寸
+        width, height = d.device.window_size()
 
-    d.config_gateway_wifi("12345678")
-    print(d.get_ip_address())
+        # 计算屏幕中间的坐标
+        middle_x = width // 2
+        middle_y = height // 2
+
+        # 定义滑动的起始点和结束点
+        start_x = middle_x
+        start_y = middle_y
+        end_x = middle_x
+        end_y = int(middle_y * 0.2)  # 向上滑动到屏幕上方 20% 的位置
+
+        # 执行滑动操作
+        d.device.swipe(start_x, start_y, end_x, end_y, duration=0.3)  # 滑动持续时间为 0.3 秒
+
+        # 等待一段时间以便观察效果
+        sleep(3)
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+    # d(text="模 板").click()
+    # d.add_light_switchs()
+    # d.add_light_switchs()
+    # d.swipe_up()
+    # d.click_element_if_texts_exists("加入")
+    # d.device.screenshot("1.png")
+
+    # print(d.device(resourceId="com.gemvary.vhpsmarthome:id/tv_device_id").get_text())
+    # d.device.xpath('//*[@resource-id="android:id/list"]/android.widget.LinearLayout[1]/android.widget.RelativeLayout[1]/android.widget.TableLayout[1]').set_text("F5111111217A0E")
+    # d.device.screenshot("1.png")
+
+    # print(d.device(resourceId="com.gemvary.vhpsmarthome:id/tv_device_id").get_text())
+    # 获取应用信息
+    # package_name = 'com.gemvary.vhpsmarthome'  # 替换为目标应用的包名
+    # app_info = d.device.app_info(package_name)
+    #
+    # # 打印应用版本信息
+    # print(f"应用版本: {app_info['versionName']}")
+    # d.unlock()
+    # d.add_light_switchs()
     # d.load_room_names()
     # d.click_element_if_texts_exists("定位")
     # print(d.get_gateway_name())
