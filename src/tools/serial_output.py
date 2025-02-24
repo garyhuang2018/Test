@@ -6,6 +6,7 @@ import serial
 import serial.tools.list_ports
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QComboBox
 from PyQt5.QtCore import QThread, pyqtSignal
+import datetime
 
 
 class SerialThread(QThread):
@@ -13,10 +14,11 @@ class SerialThread(QThread):
     data_received = pyqtSignal(str)
     error_occurred = pyqtSignal(str)  # 新增信号用于错误处理
 
-    def __init__(self, port_name, baud_rate=2000000):
+    def __init__(self, port_name, keyword, baud_rate=2000000):
         super().__init__()
         self.port_name = port_name
         self.baud_rate = baud_rate
+        self.keyword = keyword  # 新增关键字属性
         self.ser = None
 
     def run(self):
@@ -42,9 +44,22 @@ class SerialThread(QThread):
             try:
                 if self.ser.in_waiting > 0:
                     data = self.ser.read(self.ser.in_waiting).decode('utf-8')
-                    self.data_received.emit(data)
-                    # if "DEV" in data:  # 过滤包含 "DEV" 的数据
-                    #     self.data_received.emit(data)
+                    # 检查是否选择了“不过滤”选项
+                    if self.keyword == "不过滤":
+                        # 添加时间戳并显示所有数据
+                        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        for line in data.splitlines():
+                            self.data_received.emit(f"{timestamp} - {line}")
+                    else:
+                        # 使用选择的关键字进行过滤
+                        if self.keyword in data:
+                            # 添加时间戳
+                            timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            # 分包显示
+                            for line in data.splitlines():
+                                if self.keyword in line:
+                                    self.data_received.emit(f"{timestamp} - {line}")
+
             except Exception as e:
                 self.error_occurred.emit(f"Error reading from serial port: {e}")
                 self.ser.close()  # Close the port
@@ -79,6 +94,11 @@ class SerialPortApp(QWidget):
         self.update_ports()
         layout.addWidget(self.port_combobox)
 
+        # 关键字过滤下拉框
+        self.keyword_combobox = QComboBox(self)
+        self.keyword_combobox.addItems(["不过滤", "DEV dInfo", "Keyword1", "Keyword2"])  # 添加“不过滤”选项
+        layout.addWidget(self.keyword_combobox)
+
         # 文本框显示接收到的数据
         self.text_edit = QTextEdit(self)
         self.text_edit.setReadOnly(True)
@@ -107,8 +127,9 @@ class SerialPortApp(QWidget):
     def start_serial(self):
         """启动串口读取线程"""
         port_name = self.port_combobox.currentText()
+        keyword = self.keyword_combobox.currentText()  # 获取选择的关键字
         if port_name:
-            self.serial_thread = SerialThread(port_name)
+            self.serial_thread = SerialThread(port_name, keyword)
             self.serial_thread.data_received.connect(self.display_data)
             self.serial_thread.error_occurred.connect(self.display_error)  # 连接错误信号
             self.serial_thread.start()
@@ -137,5 +158,3 @@ if __name__ == "__main__":
     window = SerialPortApp()
     window.show()
     sys.exit(app.exec_())
-
-    # ... existing code ...
