@@ -1,12 +1,14 @@
 # encoding= utf-8
 # __author__= gary
 from time import sleep
+import threading
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.firefox.options import Options
+from datetime import datetime
 
 
 class UpgradeVdp:
@@ -14,7 +16,7 @@ class UpgradeVdp:
         self.username = username
         self.password = password
 
-    def login(self, browser):
+    def login(self, browser, list_item_number):
         if self.username is None or self.password is None:
             print("账号或密码错误")
             return
@@ -65,9 +67,8 @@ class UpgradeVdp:
             element = browser.find_element(By.LINK_TEXT, "授权记录")
             actions = ActionChains(browser)
             actions.move_to_element(element).perform()
-
-            # 点击第22个设备列表项
-            browser.find_element(By.CSS_SELECTOR, ".list-item:nth-child(8) .device-list").click()
+            # 点击用户指定的设备列表项
+            browser.find_element(By.CSS_SELECTOR, f".list-item:nth-child({list_item_number}) .device-list").click()
 
             # # 18 | click | id=tab-light |
             # browser.find_element(By.ID, "tab-light").click()
@@ -78,14 +79,34 @@ class UpgradeVdp:
             # browser.find_element(By.CSS_SELECTOR, "#pane-light .wrap:nth-child(1) .el-switch__core").click()
             # 点击窗帘开关按钮
             browser.find_element(By.ID, "tab-curtains").click()
-            browser.find_element(By.CSS_SELECTOR, "#pane-curtains .el-switch__core").click()
+            dev_name_element = browser.find_element(By.CSS_SELECTOR, "#pane-curtains .dev-name")
+            print(dev_name_element.text)  # Print the text of the dev-name element
+            # browser.find_element(By.CSS_SELECTOR, "#pane-curtains .el-switch__core").click()
 
+            # 查找所有窗帘开关元素
+            curtain_switches = browser.find_elements(By.CSS_SELECTOR, "#pane-curtains .wrap .el-switch__core")
+
+            if len(curtain_switches) == 1:
+                # 单个窗帘的情况
+                browser.find_element(By.CSS_SELECTOR, "#pane-curtains .el-switch__core").click()
+            elif len(curtain_switches) > 1:
+                # 多个窗帘的情况
+                for i in range(1, len(curtain_switches) + 1):
+                    selector = f"#pane-curtains .wrap:nth-child({i}) .el-switch__core"
+                    browser.find_element(By.CSS_SELECTOR, selector).click()
+                    if i < len(curtain_switches):
+                        # 除了最后一个元素，每次点击后等待 2 秒
+                        sleep(2)
+            else:
+                print("未找到窗帘开关元素")
         except Exception as e:
             print(f"错误发生: {e}")
             print("跳过此操作，继续执行下一个...")
 
 
-def run_script(username, password, interval, repetitions, headless=True):
+def run_script(username, password, interval, repetitions, headless=True, list_item_number=22):
+    results = []  # List to store results for each run
+
     for i in range(repetitions):
         print(f"执行第 {i+1} 次操作...")
 
@@ -109,15 +130,53 @@ def run_script(username, password, interval, repetitions, headless=True):
             upgradeVdp = UpgradeVdp(username, password)
 
             # 执行登录操作
-            upgradeVdp.login(browser)
+            upgradeVdp.login(browser, list_item_number)
+
+            # 获取 dev_name_element text
+            dev_name_element = browser.find_element(By.CSS_SELECTOR, "#pane-curtains .dev-name")
+            dev_name_text = dev_name_element.text
+
+            # Record the result
+            results.append(f"Run Number: {i + 1}, Run Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, Device Name: {dev_name_text}")
 
             # 执行完一次后等待指定的间隔时间
             print(f"等待 {interval} 秒后执行下一次操作...")
             sleep(interval)
 
+        except Exception as e:
+            print(f"错误发生: {e}")
+            print("跳过此操作，继续执行下一个...")
+
         finally:
             # 每次操作后关闭浏览器
             browser.quit()
+
+    # Save results to a text file
+    with open("测试记录.txt", "w", encoding="utf-8") as file:
+        for result in results:
+            file.write(result + "\n")
+    print("结果已保存到 测试记录.txt")
+
+
+def get_input(prompt, timeout):
+    result = [None]
+
+    def input_thread():
+        result[0] = input(prompt)
+
+    thread = threading.Thread(target=input_thread)
+    thread.start()
+    thread.join(timeout)
+
+    if thread.is_alive():
+        print("Timeout occurred, using default value 22")
+        return 22
+    else:
+        try:
+            return int(result[0])
+        except ValueError:
+            print("输入无效，使用默认值22")
+            return 22
 
 
 if __name__ == '__main__':
@@ -128,5 +187,9 @@ if __name__ == '__main__':
     repetitions = int(input("请输入执行次数: "))
     headless = input("是否隐藏浏览器窗口? (y/n): ").strip().lower() == 'y'
 
+    # 获取用户输入的设备列表项编号，默认值为22
+    list_item_number = get_input("请输入设备列表项编号 (默认22): ", 2)
+    print(f"使用的设备列表项编号: {list_item_number}")
+
     # 执行脚本
-    run_script(username, password, interval, repetitions, headless)
+    run_script(username, password, interval, repetitions, headless, list_item_number)
