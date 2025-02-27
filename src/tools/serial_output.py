@@ -20,38 +20,34 @@ class SerialThread(QThread):
         self.keyword = keyword
         self.ser = None
         self.buffer = ""  # 新增数据缓冲区
+        self.is_running = True  # 控制线程运行的标志
 
     def run(self):
-        while True:
+        while self.is_running:
             try:
                 self.ser = serial.Serial(
                     port=self.port_name,
                     baudrate=self.baud_rate,
                     timeout=1
                 )
+                while self.is_running and self.ser.is_open:
+                    if self.ser.in_waiting > 0:
+                        raw_data = self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
+                        self.buffer += raw_data
+                        while '\n' in self.buffer:
+                            line, self.buffer = self.buffer.split('\n', 1)
+                            line = line.strip()
+                            if line:
+                                self.process_line(line)
+                    self.msleep(10)  # 避免CPU占用过高
                 break
             except Exception as e:
-                self.error_occurred.emit(f"打开串口失败: {e}")
+                self.error_occurred.emit(f"错误: {e}")
                 self.msleep(1000)
+            finally:
+                if self.ser and self.ser.is_open:
+                    self.ser.close()
 
-        while self.ser.is_open:
-            try:
-                if self.ser.in_waiting > 0:
-                    raw_data = self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
-                    self.buffer += raw_data  # 追加到缓冲区
-
-                    # 按换行符分割处理完整行
-                    while '\n' in self.buffer:
-                        line, self.buffer = self.buffer.split('\n', 1)
-                        line = line.strip()
-                        if line:
-                            self.process_line(line)
-
-            except Exception as e:
-                self.error_occurred.emit(f"读取串口错误: {e}")
-                self.ser.close()
-                self.msleep(1000)
-                # 不再递归调用 self.run()
 
     def process_line(self, line):
         """处理单行数据并发送信号"""
@@ -130,9 +126,9 @@ class SerialPortApp(QWidget):
         self.text_edit.append(f"Error: {error_message}")
 
     def stop_serial(self):
-        """停止串口读取线程"""
         if self.serial_thread:
-            self.serial_thread.stop()
+            self.serial_thread.stop()  # 直接调用停止方法
+            self.serial_thread.wait()  # 等待线程完全退出
             self.start_button.setEnabled(True)
             self.stop_button.setEnabled(False)
 
