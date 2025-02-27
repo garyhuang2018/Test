@@ -10,71 +10,59 @@ import datetime
 
 
 class SerialThread(QThread):
-    # 定义信号，用于将接收到的数据发送给主线程
     data_received = pyqtSignal(str)
-    error_occurred = pyqtSignal(str)  # 新增信号用于错误处理
+    error_occurred = pyqtSignal(str)
 
     def __init__(self, port_name, keyword, baud_rate=2000000):
         super().__init__()
         self.port_name = port_name
         self.baud_rate = baud_rate
-        self.keyword = keyword  # 新增关键字属性
+        self.keyword = keyword
         self.ser = None
+        self.buffer = ""  # 新增数据缓冲区
 
     def run(self):
-        """
-        运行串口读取线程，读取串口数据并过滤
-        """
         while True:
             try:
                 self.ser = serial.Serial(
                     port=self.port_name,
                     baudrate=self.baud_rate,
-                    bytesize=serial.EIGHTBITS,
-                    parity=serial.PARITY_NONE,
-                    stopbits=serial.STOPBITS_ONE,
                     timeout=1
                 )
-                break  # Exit loop if successful
+                break
             except Exception as e:
-                self.error_occurred.emit(f"Error opening serial port: {e}")
-                self.msleep(1000)  # Wait before retrying
+                self.error_occurred.emit(f"打开串口失败: {e}")
+                self.msleep(1000)
 
         while self.ser.is_open:
             try:
                 if self.ser.in_waiting > 0:
-                    data = self.ser.read(self.ser.in_waiting).decode('utf-8')
-                    # 检查是否选择了“不过滤”选项
-                    if self.keyword == "不过滤":
-                        # 添加时间戳并显示所有数据
-                        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        for line in data.splitlines():
-                            self.data_received.emit(f"{timestamp} - {line}")
-                    else:
-                        # 使用选择的关键字进行过滤
-                        if self.keyword in data:
-                            # 添加时间戳
-                            timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                            # 分包显示
-                            for line in data.splitlines():
-                                if self.keyword in line:
-                                    self.data_received.emit(f"{timestamp} - {line}")
+                    raw_data = self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
+                    self.buffer += raw_data  # 追加到缓冲区
+
+                    # 按换行符分割处理完整行
+                    while '\n' in self.buffer:
+                        line, self.buffer = self.buffer.split('\n', 1)
+                        line = line.strip()
+                        if line:
+                            self.process_line(line)
 
             except Exception as e:
-                self.error_occurred.emit(f"Error reading from serial port: {e}")
-                self.ser.close()  # Close the port
-                self.msleep(1000)  # Wait before retrying
-                self.run()  # Attempt to reopen the port
-                break
+                self.error_occurred.emit(f"读取串口错误: {e}")
+                self.ser.close()
+                self.msleep(1000)
+                # 不再递归调用 self.run()
+
+    def process_line(self, line):
+        """处理单行数据并发送信号"""
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        if self.keyword == "不过滤" or self.keyword in line:
+            self.data_received.emit(f"{timestamp} - {line}")
 
     def stop(self):
-        """
-        停止串口读取线程
-        """
-        if self.ser:
+        if self.ser and self.ser.is_open:
             self.ser.close()
         self.quit()
-
 
 class SerialPortApp(QWidget):
     def __init__(self):
@@ -96,7 +84,7 @@ class SerialPortApp(QWidget):
 
         # 关键字过滤下拉框
         self.keyword_combobox = QComboBox(self)
-        self.keyword_combobox.addItems(["不过滤", "DEV dInfo", "Keyword1", "Keyword2"])  # 添加“不过滤”选项
+        self.keyword_combobox.addItems(["不过滤", "DEV dInfo", "DEV scAct", "Keyword2"])  # 添加“不过滤”选项
         layout.addWidget(self.keyword_combobox)
 
         # 文本框显示接收到的数据
