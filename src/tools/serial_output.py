@@ -4,10 +4,10 @@
 import sys
 import serial
 import serial.tools.list_ports
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QTextEdit, QPushButton, QComboBox
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, QFileDialog
 from PyQt5.QtCore import QThread, pyqtSignal
 import datetime
-
+from openpyxl import Workbook
 
 class SerialThread(QThread):
     data_received = pyqtSignal(str)
@@ -48,7 +48,6 @@ class SerialThread(QThread):
                 if self.ser and self.ser.is_open:
                     self.ser.close()
 
-
     def process_line(self, line):
         """处理单行数据并发送信号"""
         timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -69,37 +68,53 @@ class SerialPortApp(QWidget):
 
         self.initUI()
         self.serial_thread = None
+        self.received_data = []  # 用于存储接收到的数据
 
     def initUI(self):
-        layout = QVBoxLayout()
+        main_layout = QVBoxLayout()
 
         # 组合框显示可用的串口
         self.port_combobox = QComboBox(self)
         self.update_ports()
-        layout.addWidget(self.port_combobox)
+        main_layout.addWidget(self.port_combobox)
 
         # 关键字过滤下拉框
         self.keyword_combobox = QComboBox(self)
-        self.keyword_combobox.addItems(["不过滤", "DEV dInfo", "DEV scAct", "Keyword2"])  # 添加“不过滤”选项
-        layout.addWidget(self.keyword_combobox)
+        self.keyword_combobox.addItems(["不过滤", "DEV dInfo", "DEV scAct", "DEV"])  # 添加“不过滤”选项
+        main_layout.addWidget(self.keyword_combobox)
 
         # 文本框显示接收到的数据
         self.text_edit = QTextEdit(self)
         self.text_edit.setReadOnly(True)
-        layout.addWidget(self.text_edit)
+        main_layout.addWidget(self.text_edit)
+
+        # 按钮布局
+        button_layout = QHBoxLayout()
 
         # 开始按钮
         self.start_button = QPushButton("Start", self)
         self.start_button.clicked.connect(self.start_serial)
-        layout.addWidget(self.start_button)
+        button_layout.addWidget(self.start_button)
 
         # 停止按钮
         self.stop_button = QPushButton("Stop", self)
         self.stop_button.clicked.connect(self.stop_serial)
         self.stop_button.setEnabled(False)
-        layout.addWidget(self.stop_button)
+        button_layout.addWidget(self.stop_button)
 
-        self.setLayout(layout)
+        # 导出到 Excel 按钮
+        self.export_button = QPushButton("Export to Excel", self)
+        self.export_button.clicked.connect(self.export_to_excel)
+        button_layout.addWidget(self.export_button)
+
+        # 清除输出记录按钮
+        self.clear_button = QPushButton("Clear Output", self)
+        self.clear_button.clicked.connect(self.clear_output)
+        button_layout.addWidget(self.clear_button)
+
+        main_layout.addLayout(button_layout)
+
+        self.setLayout(main_layout)
 
     def update_ports(self):
         """更新串口列表"""
@@ -135,6 +150,33 @@ class SerialPortApp(QWidget):
     def display_data(self, data):
         """将接收到的数据显示在文本框中"""
         self.text_edit.append(data)
+        self.received_data.append(data)  # 存储接收到的数据
+
+    def export_to_excel(self):
+        if not self.received_data:
+            return
+
+        # 创建一个新的 Excel 工作簿
+        workbook = Workbook()
+        sheet = workbook.active
+
+        # 添加表头
+        sheet.append(["Timestamp", "Data"])
+
+        # 遍历接收到的数据并写入 Excel
+        for line in self.received_data:
+            timestamp, data = line.split(" - ", 1)
+            sheet.append([timestamp, data])
+
+        # 打开文件保存对话框
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx)")
+        if file_path:
+            # 保存 Excel 文件
+            workbook.save(file_path)
+
+    def clear_output(self):
+        self.text_edit.clear()
+        self.received_data = []
 
 
 if __name__ == "__main__":
