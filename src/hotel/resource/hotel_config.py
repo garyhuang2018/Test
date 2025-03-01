@@ -6,13 +6,12 @@ from PyQt5 import uic
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QCheckBox, QWidget,
-    QHBoxLayout, QMessageBox, QDialog, QVBoxLayout, QComboBox, QPushButton
+    QHBoxLayout, QMessageBox, QDialog, QVBoxLayout, QComboBox, QPushButton, QLabel, QLineEdit, QTableWidget
 )
 from api.server_request import fetch_hotel_list, fetch_hotel_rooms_no
 
 
 def extract_project_name(file_name):
-    # 提取项目名称，假设项目名称在“项目交付文档”之前
     if "项目交付文档" in file_name:
         return file_name.split("项目交付文档")[0].strip()
     return None
@@ -23,7 +22,6 @@ def match_project_with_hotels(project_name, hotel_list_data):
         hotel_list = hotel_list_data.get('data', {}).get('data', [])
     elif isinstance(hotel_list_data, str):
         try:
-            # 将 JSON 字符串解析为 Python 对象
             hotel_list_data = json.loads(hotel_list_data)
             hotel_list = hotel_list_data.get('data', {}).get('data', [])
         except json.JSONDecodeError:
@@ -35,11 +33,9 @@ def match_project_with_hotels(project_name, hotel_list_data):
 
     if project_name:
         for hotel in hotel_list:
-            # 假设酒店列表中每个元素有 'hotelName' 字段表示酒店名称
             if 'hotelName' in hotel and hotel['hotelName'] == project_name:
                 QMessageBox.information(None, "匹配结果", f"匹配成功！文件名中的项目 '{project_name}' 在酒店列表中找到。")
                 return hotel
-        # 匹配失败，弹出下拉框让用户选择
         hotel_names = [hotel['hotelName'] for hotel in hotel_list]
         selected_hotel = show_hotel_selection_dialog(hotel_names)
         if selected_hotel:
@@ -71,10 +67,8 @@ def show_hotel_selection_dialog(hotel_names):
 
 
 def show_room_selection_dialog(room_no_list):
-
     dialog = QDialog()
-    # 设置对话框的最小宽度，你可以根据需要调整这个值
-    dialog.setMinimumWidth(200)
+    dialog.setMinimumWidth(250)
     dialog.setWindowTitle("选择要调试的房间")
     layout = QVBoxLayout()
 
@@ -95,65 +89,67 @@ def show_room_selection_dialog(room_no_list):
 class PanelPreDebugTool(QMainWindow):
     def __init__(self):
         super().__init__()
-        # 加载 UI 文件
-        # Determine the path to the UI file
         ui_file_path = os.path.join(os.path.dirname(__file__), 'panel.ui')
         uic.loadUi(ui_file_path, self)
 
-        # 初始化侧边栏点击事件
         self.sidebar_list.itemClicked.connect(self.show_page)
-
-        # 初始化导入按钮事件
         self.import_button.clicked.connect(self.import_order_info)
-
-        # 初始化选择预调试设备按钮事件
         self.select_devices_button.clicked.connect(self.on_select_devices_clicked)
 
-        # 存储订单信息
         self.order_info = None
 
+        self.init_config_interface()
+
+    def init_config_interface(self):
+        self.config_widget = QWidget()
+        config_layout = QVBoxLayout(self.config_widget)
+
+        self.username_label = QLabel("Username:")
+        self.username_field = QLineEdit()
+        self.password_label = QLabel("Password:")
+        self.password_field = QLineEdit()
+        self.password_field.setEchoMode(QLineEdit.Password)
+
+        config_layout.addWidget(self.username_label)
+        config_layout.addWidget(self.username_field)
+        config_layout.addWidget(self.password_label)
+        config_layout.addWidget(self.password_field)
+
+        # 创建表格部件
+        self.table_widget = QTableWidget()
+        self.table_widget.setColumnCount(1)
+        self.table_widget.setHorizontalHeaderLabels(["设备信息"])
+        config_layout.addWidget(self.table_widget)
+
+        self.stacked_widget.insertWidget(1, self.config_widget)
+
     def show_page(self, item):
-        # 根据侧边栏选择的项目显示相应页面
         index = self.sidebar_list.row(item)
         self.stacked_widget.setCurrentIndex(index)
 
     def import_order_info(self):
-        # 读取配置文件
         self.read_config()
 
-        # 打开文件选择对话框
         file_path, _ = QFileDialog.getOpenFileName(self, "选择订单信息文件", "", "Excel 文件 (*.xlsx)")
         if file_path:
             try:
-                # 提取项目名称
                 file_name = os.path.basename(file_path)
                 project_name = extract_project_name(file_name)
-                # 跳过前两行读取 Excel 文件
                 self.order_info = pd.read_excel(file_path, skiprows=2)
                 self.statusBar().showMessage("订单信息导入成功")
 
-                # 预览文件的前几行数据
                 self.preview_data()
-                # 获取酒店列表
                 if hasattr(self, 'username') and hasattr(self, 'password'):
                     hotel_list = fetch_hotel_list(self.username, self.password)
                     if hotel_list:
-                        print(hotel_list)
-                        # 进行项目名称匹配
                         selected_hotel = match_project_with_hotels(project_name, hotel_list)
                         if selected_hotel:
-                            print(f"最终选择的酒店: {selected_hotel['hotelName']}")
-                            print(f"选择酒店的代码: {selected_hotel['hotelCode']}")
                             room_no_list = fetch_hotel_rooms_no(self.username, self.password, selected_hotel['hotelCode'])
-                            print(room_no_list)
                             if room_no_list:
                                 selected_room = show_room_selection_dialog(room_no_list)
                                 if selected_room:
-                                    print(f"用户选择要调试的房间: {selected_room}")
-                                    # 跳转到下一个 stack 页面
-                                    self.switch_to_next_stack()
-                                    # 更新 statusbar 信息
                                     self.update_statusbar(project_name, selected_room)
+                                    self.select_devices_button.clicked.connect(lambda: self.switch_to_next_stack(project_name, selected_room))
                                 else:
                                     print("用户未选择房间。")
                             else:
@@ -166,20 +162,15 @@ class PanelPreDebugTool(QMainWindow):
 
     def preview_data(self):
         if self.order_info is not None:
-            # 获取数据的前几行
             preview_df = self.order_info.head()
 
-            # 设置表格的行数和列数，在最前面增加一列用于复选框
             rows, columns = preview_df.shape
             self.tableWidget.setRowCount(rows)
             self.tableWidget.setColumnCount(columns + 1)
-            # 设置表格的列标题，将“选择”列放在最前面
             headers = ["选择"] + list(preview_df.columns)
             self.tableWidget.setHorizontalHeaderLabels(headers)
 
-            # 填充表格数据
             for row in range(rows):
-                # 添加复选框到第一列
                 checkbox = QCheckBox()
                 widget = QWidget()
                 layout = QHBoxLayout(widget)
@@ -217,7 +208,6 @@ class PanelPreDebugTool(QMainWindow):
             self.statusBar().showMessage("未选择任何设备，请勾选需要预调试的设备。")
 
     def read_config(self):
-        # 获取当前脚本所在的目录
         base_dir = os.path.dirname(os.path.abspath(__file__))
         config_file_path = os.path.join(base_dir, 'config', 'config.txt')
 
@@ -235,18 +225,31 @@ class PanelPreDebugTool(QMainWindow):
         except FileNotFoundError:
             print("未找到配置文件 'config/config.txt'。")
 
-    def switch_to_next_stack(self):
-        # 获取当前 stack 的索引
-        current_index = self.stacked_widget.currentIndex()
-        # 计算下一个索引
-        next_index = (current_index + 1) % self.stacked_widget.count()
-        # 切换到下一个页面
-        self.stacked_widget.setCurrentIndex(next_index)
+    def switch_to_next_stack(self, project_name, selected_room):
+        selected_devices = self.get_selected_rows()
+        if selected_devices:
+            current_index = self.stacked_widget.currentIndex()
+            next_index = (current_index + 1) % self.stacked_widget.count()
+            self.stacked_widget.setCurrentIndex(next_index)
+            self.update_statusbar(project_name, selected_room, selected_devices)
+            # 提取设备信息
+            device_info = [row[5] for row in selected_devices]
+            # 填充表格数据
+            self.fill_table(device_info)
+        else:
+            self.statusBar().showMessage("未选择任何设备，请勾选需要预调试的设备。")
 
-    def update_statusbar(self, project_name, selected_room):
-        # 更新 statusbar 信息
+    def update_statusbar(self, project_name, selected_room, selected_devices=None):
         status_message = f"项目: {project_name}, 选定房间: {selected_room}"
+        if selected_devices:
+            devices_info = ', '.join([', '.join(device) for device in selected_devices])
+            status_message += f", 选定设备: {devices_info}"
         self.statusBar().showMessage(status_message)
+
+    def fill_table(self, device_info):
+        self.table_widget.setRowCount(len(device_info))
+        for row, info in enumerate(device_info):
+            self.table_widget.setItem(row, 0, QTableWidgetItem(info))
 
 
 if __name__ == "__main__":
