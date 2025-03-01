@@ -104,21 +104,10 @@ class PanelPreDebugTool(QMainWindow):
         self.config_widget = QWidget()
         config_layout = QVBoxLayout(self.config_widget)
 
-        self.username_label = QLabel("Username:")
-        self.username_field = QLineEdit()
-        self.password_label = QLabel("Password:")
-        self.password_field = QLineEdit()
-        self.password_field.setEchoMode(QLineEdit.Password)
-
-        config_layout.addWidget(self.username_label)
-        config_layout.addWidget(self.username_field)
-        config_layout.addWidget(self.password_label)
-        config_layout.addWidget(self.password_field)
-
         # 创建表格部件
         self.table_widget = QTableWidget()
-        self.table_widget.setColumnCount(1)
-        self.table_widget.setHorizontalHeaderLabels(["设备信息"])
+        self.table_widget.setColumnCount(3)
+        self.table_widget.setHorizontalHeaderLabels(["设备信息", "产品型号", "负载"])
         config_layout.addWidget(self.table_widget)
 
         self.stacked_widget.insertWidget(1, self.config_widget)
@@ -232,10 +221,8 @@ class PanelPreDebugTool(QMainWindow):
             next_index = (current_index + 1) % self.stacked_widget.count()
             self.stacked_widget.setCurrentIndex(next_index)
             self.update_statusbar(project_name, selected_room, selected_devices)
-            # 提取设备信息
-            device_info = [row[5] for row in selected_devices]
             # 填充表格数据
-            self.fill_table(device_info)
+            self.fill_table(selected_devices)
         else:
             self.statusBar().showMessage("未选择任何设备，请勾选需要预调试的设备。")
 
@@ -246,10 +233,61 @@ class PanelPreDebugTool(QMainWindow):
             status_message += f", 选定设备: {devices_info}"
         self.statusBar().showMessage(status_message)
 
-    def fill_table(self, device_info):
-        self.table_widget.setRowCount(len(device_info))
-        for row, info in enumerate(device_info):
-            self.table_widget.setItem(row, 0, QTableWidgetItem(info))
+    def fill_table(self, selected_devices):
+        # 固定的负载名称列表
+        fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带"]
+        total_rows = 0
+        # 先计算总共需要的行数
+        for device in selected_devices:
+            load_str = device[7]
+            has_load = False
+            for load in fixed_loads:
+                if load in load_str:
+                    total_rows += 1
+                    has_load = True
+            if not has_load:
+                total_rows += 1
+
+        self.table_widget.setRowCount(total_rows)
+        current_row = 0
+        for device in selected_devices:
+            device_info = device[5]
+            product_model = device[3]
+            load_str = device[7]
+            has_load = False
+            for load in fixed_loads:
+                if load in load_str:
+                    self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
+                    self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
+                    self.table_widget.setItem(current_row, 2, QTableWidgetItem(load))
+                    current_row += 1
+                    has_load = True
+            if not has_load:
+                self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
+                self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
+                self.table_widget.setItem(current_row, 2, QTableWidgetItem(""))
+                current_row += 1
+
+        # 合并相同产品名称和型号的单元格
+        current_row = 0
+        while current_row < self.table_widget.rowCount():
+            device_info = self.table_widget.item(current_row, 0).text()
+            product_model = self.table_widget.item(current_row, 1).text()
+            span = 1
+            next_row = current_row + 1
+            while next_row < self.table_widget.rowCount():
+                next_device_info = self.table_widget.item(next_row, 0).text()
+                next_product_model = self.table_widget.item(next_row, 1).text()
+                if next_device_info == device_info and next_product_model == product_model:
+                    span += 1
+                    # 隐藏后续相同的单元格
+                    for col in range(2):
+                        self.table_widget.setSpan(current_row, col, span, 1)
+                        self.table_widget.item(next_row, col).setFlags(Qt.NoItemFlags)
+                else:
+                    break
+                next_row += 1
+            current_row = next_row
 
 
 if __name__ == "__main__":

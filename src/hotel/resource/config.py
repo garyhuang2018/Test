@@ -1,111 +1,93 @@
-# # encoding= utf-8
-# #__author__= gary
-# import sys
-# from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QPushButton, QTableWidget, QTableWidgetItem
-#
-#
-# class MainWindow(QWidget):
-#     def __init__(self):
-#         super().__init__()
-#
-#         # 初始化界面
-#         self.init_ui()
-#
-#     def init_ui(self):
-#         # 左侧布局
-#         left_layout = QVBoxLayout()
-#         self.group_list = QListWidget()
-#         self.group_list.addItems(["房间", "卧室", "主卧", "次卧", "阳台", "客厅", "卫生间", "衣帽间"])
-#         add_button = QPushButton("确认添加到下表")
-#         add_button.clicked.connect(self.add_to_table)
-#         left_layout.addWidget(self.group_list)
-#         left_layout.addWidget(add_button)
-#
-#         # 中间布局
-#         middle_layout = QVBoxLayout()
-#         self.search_box_middle = QLineEdit()
-#         self.search_box_middle.setPlaceholderText("请输入查询")
-#         self.device_list = QListWidget()
-#         self.device_list.addItems(["休闲灯", "浴室灯", "玄关灯", "浴缸灯", "镜前射灯", "行李架灯"])
-#         move_left_button = QPushButton("<")
-#         move_right_button = QPushButton(">")
-#         move_layout = QHBoxLayout()
-#         move_layout.addWidget(move_left_button)
-#         move_layout.addWidget(move_right_button)
-#         middle_layout.addWidget(self.search_box_middle)
-#         middle_layout.addWidget(self.device_list)
-#         middle_layout.addLayout(move_layout)
-#
-#         # 右侧布局
-#         right_layout = QVBoxLayout()
-#         self.search_box_right = QLineEdit()
-#         self.search_box_right.setPlaceholderText("请输入查询")
-#         self.selected_device_list = QListWidget()
-#         self.selected_device_list.addItem("无数据")
-#         right_layout.addWidget(self.search_box_right)
-#         right_layout.addWidget(self.selected_device_list)
-#
-#         # 底部表格布局
-#         table_layout = QVBoxLayout()
-#         self.table = QTableWidget()
-#         self.table.setColumnCount(3)
-#         self.table.setHorizontalHeaderLabels(["分组", "设备名称", "操作"])
-#         submit_button = QPushButton("提交")
-#         submit_button.clicked.connect(self.submit_data)
-#         table_layout.addWidget(self.table)
-#         table_layout.addWidget(submit_button)
-#
-#         # 整体布局
-#         main_layout = QHBoxLayout()
-#         main_layout.addLayout(left_layout)
-#         main_layout.addLayout(middle_layout)
-#         main_layout.addLayout(right_layout)
-#         main_layout.addLayout(table_layout)
-#
-#         self.setLayout(main_layout)
-#         self.setWindowTitle("设备管理界面")
-#         self.show()
-#
-#     def add_to_table(self):
-#         selected_group = self.group_list.currentItem().text()
-#         row = self.table.rowCount()
-#         self.table.insertRow(row)
-#         self.table.setItem(row, 0, QTableWidgetItem(selected_group))
-#         self.table.setItem(row, 1, QTableWidgetItem("左床头灯"))
-#         self.table.setItem(row, 2, QTableWidgetItem("删除"))
-#
-#     def submit_data(self):
-#         # 这里可以添加提交数据到数据库或其他处理逻辑
-#         print("提交数据")
-#
-#
-# if __name__ == '__main__':
-#     app = QApplication(sys.argv)
-#     window = MainWindow()
-#     sys.exit(app.exec_())
-#
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QLineEdit, QComboBox, QPushButton
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTableWidget, QTableWidgetItem, QLineEdit, QComboBox, QPushButton, QTextEdit, QFileDialog, QMenuBar, QMenu, QAction
+import serial
+import serial.tools.list_ports
+from PyQt5.QtCore import QThread, pyqtSignal
+import datetime
+from openpyxl import Workbook
+import os
+
+def extract_project_name(file_name):
+    if "项目交付文档" in file_name:
+        return file_name.split("项目交付文档")[0].strip()
+    return None
+
+class SerialThread(QThread):
+    data_received = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, port_name, keyword, baud_rate=2000000):
+        super().__init__()
+        self.port_name = port_name
+        self.baud_rate = baud_rate
+        self.keyword = keyword
+        self.ser = None
+        self.buffer = ""  # 新增数据缓冲区
+        self.is_running = True  # 控制线程运行的标志
+
+    def run(self):
+        while self.is_running:
+            try:
+                self.ser = serial.Serial(
+                    port=self.port_name,
+                    baudrate=self.baud_rate,
+                    timeout=1
+                )
+                while self.is_running and self.ser.is_open:
+                    if self.ser.in_waiting > 0:
+                        raw_data = self.ser.read(self.ser.in_waiting).decode('utf-8', errors='ignore')
+                        self.buffer += raw_data
+                        while '\n' in self.buffer:
+                            line, self.buffer = self.buffer.split('\n', 1)
+                            line = line.strip()
+                            if line:
+                                self.process_line(line)
+                    self.msleep(10)  # 避免CPU占用过高
+                break
+            except Exception as e:
+                self.error_occurred.emit(f"错误: {e}")
+                self.msleep(1000)
+            finally:
+                if self.ser and self.ser.is_open:
+                    self.ser.close()
+
+    def process_line(self, line):
+        keyword = self.keyword
+        if keyword == "不过滤" or keyword in line:
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.data_received.emit(f"{timestamp} - {line}")
 
 
 class HotelDeviceManagementUI(QWidget):
     def __init__(self):
         super().__init__()
+        self.received_data = []
         self.initUI()
 
     def initUI(self):
-        # 整体布局
-        main_layout = QVBoxLayout()
+        # 创建菜单栏
+        menubar = QMenuBar(self)
+        file_menu = QMenu('文件', self)
+        read_order_action = QAction('读取订单信息', self)
+        read_order_action.triggered.connect(self.read_order_info)
+        file_menu.addAction(read_order_action)
+        menubar.addMenu(file_menu)
+
+        # 整体水平布局
+        main_layout = QHBoxLayout()
+
+        # 左侧布局
+        left_layout = QVBoxLayout()
 
         # 标题栏
-        title_label = QLabel("武汉美居酒店展箱样板间批量一表交付(33间大床房)")
-        main_layout.addWidget(title_label)
+        self.title_label = QLabel("武汉美居酒店展箱样板间批量一表交付(33间大床房)")
+        left_layout.addWidget(self.title_label)
 
         # 设备控制及验收表格
         table_layout = QVBoxLayout()
         self.device_table = QTableWidget()
-        self.device_table.setColumnCount(7)
-        self.device_table.setHorizontalHeaderLabels(["设备", "入户玄关", "右床头", "卫浴室", "左床头", "工厂验收", "现场验收"])
+        self.device_table.setColumnCount(8)
+        self.device_table.setHorizontalHeaderLabels(["设备", "产品型号", "入户玄关", "右床头", "卫浴室", "左床头", "工厂验收", "现场验收"])
         self.device_table.setRowCount(11)
         self.device_table.setItem(0, 0, QTableWidgetItem("插卡取电"))
         self.device_table.setItem(1, 0, QTableWidgetItem("开关排气扇"))
@@ -143,7 +125,7 @@ class HotelDeviceManagementUI(QWidget):
             self.device_table.setItem(row, 5, QTableWidgetItem(site_acceptance[row]))
 
         table_layout.addWidget(self.device_table)
-        main_layout.addLayout(table_layout)
+        left_layout.addLayout(table_layout)
 
         # 操作指令输入及执行区域
         instruction_layout = QHBoxLayout()
@@ -153,7 +135,7 @@ class HotelDeviceManagementUI(QWidget):
         self.execute_button.clicked.connect(self.executeInstruction)
         instruction_layout.addWidget(self.instruction_input)
         instruction_layout.addWidget(self.execute_button)
-        main_layout.addLayout(instruction_layout)
+        left_layout.addLayout(instruction_layout)
 
         # 酒店、日期等信息填写区域
         info_layout = QHBoxLayout()
@@ -187,11 +169,124 @@ class HotelDeviceManagementUI(QWidget):
         info_layout.addWidget(acceptance_label)
         info_layout.addWidget(self.acceptance_edit)
 
-        main_layout.addLayout(info_layout)
+        left_layout.addLayout(info_layout)
+
+        # 串口数据面板
+        right_layout = QVBoxLayout()
+
+        # 组合框显示可用的串口
+        self.port_combobox = QComboBox(self)
+        self.update_ports()
+        right_layout.addWidget(self.port_combobox)
+
+        # 关键字过滤下拉框
+        self.keyword_combobox = QComboBox(self)
+        self.keyword_combobox.addItems(["不过滤", "DEV dInfo", "DEV scAct", "DEV"])
+        right_layout.addWidget(self.keyword_combobox)
+
+        # 文本框显示接收到的数据
+        self.text_edit = QTextEdit(self)
+        self.text_edit.setReadOnly(True)
+        right_layout.addWidget(self.text_edit)
+
+        # 按钮布局
+        button_layout = QHBoxLayout()
+
+        # 开始按钮
+        self.start_button = QPushButton("Start", self)
+        self.start_button.clicked.connect(self.start_serial)
+        button_layout.addWidget(self.start_button)
+
+        # 停止按钮
+        self.stop_button = QPushButton("Stop", self)
+        self.stop_button.clicked.connect(self.stop_serial)
+        self.stop_button.setEnabled(False)
+        button_layout.addWidget(self.stop_button)
+
+        # 导出到 Excel 按钮
+        self.export_button = QPushButton("Export to Excel", self)
+        self.export_button.clicked.connect(self.export_to_excel)
+        button_layout.addWidget(self.export_button)
+
+        # 清除输出记录按钮
+        self.clear_button = QPushButton("Clear Output", self)
+        self.clear_button.clicked.connect(self.clear_output)
+        button_layout.addWidget(self.clear_button)
+
+        right_layout.addLayout(button_layout)
+
+        # 将左侧和右侧布局添加到主布局
+        main_layout.addLayout(left_layout)
+        main_layout.addLayout(right_layout)
+
+        # 将菜单栏添加到布局中
+        main_layout.setMenuBar(menubar)
 
         self.setLayout(main_layout)
         self.setWindowTitle("酒店设备管理与验收界面")
         self.show()
+
+    def update_ports(self):
+        """更新串口列表"""
+        self.port_combobox.clear()
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            self.port_combobox.addItem(port.device)
+
+    def start_serial(self):
+        """启动串口读取线程"""
+        port_name = self.port_combobox.currentText()
+        keyword = self.keyword_combobox.currentText()  # 获取选择的关键字
+        if port_name:
+            self.serial_thread = SerialThread(port_name, keyword)
+            self.serial_thread.data_received.connect(self.display_data)
+            self.serial_thread.error_occurred.connect(self.display_error)  # 连接错误信号
+            self.serial_thread.start()
+
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+
+    def display_error(self, error_message):
+        """显示错误信息"""
+        self.text_edit.append(f"Error: {error_message}")
+
+    def stop_serial(self):
+        if self.serial_thread:
+            self.serial_thread.is_running = False
+            self.serial_thread.wait()
+            self.start_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+
+    def display_data(self, data):
+        """将接收到的数据显示在文本框中"""
+        self.text_edit.append(data)
+        self.received_data.append(data)  # 存储接收到的数据
+
+    def export_to_excel(self):
+        if not self.received_data:
+            return
+
+        # 创建一个新的 Excel 工作簿
+        workbook = Workbook()
+        sheet = workbook.active
+
+        # 添加表头
+        sheet.append(["Timestamp", "Data"])
+
+        # 遍历接收到的数据并写入 Excel
+        for line in self.received_data:
+            timestamp, data = line.split(" - ", 1)
+            sheet.append([timestamp, data])
+
+        # 打开文件保存对话框
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx)")
+        if file_path:
+            # 保存 Excel 文件
+            workbook.save(file_path)
+
+    def clear_output(self):
+        self.text_edit.clear()
+        self.received_data = []
 
     def executeInstruction(self):
         instruction = self.instruction_input.text()
@@ -200,6 +295,22 @@ class HotelDeviceManagementUI(QWidget):
             print(f"执行指令：打开{mode}模式")
         else:
             print("不支持的指令")
+
+    def read_order_info(self):
+        # 这里简单模拟从文件读取订单信息，实际应用中可以根据需求修改
+        file_path, _ = QFileDialog.getOpenFileName(self, "选择订单信息文件", "", "Excel 文件 (*.xlsx)")
+        if file_path:
+            try:
+                file_name = os.path.basename(file_path)
+                hotel_name = extract_project_name(file_name)
+                if hotel_name:
+                    # 更新标题栏中的酒店信息
+                    new_title = f"{hotel_name}展箱样板间批量一表交付(33间大床房)"
+                    self.title_label.setText(new_title)
+                    # 更新酒店信息输入框
+                    self.hotel_edit.setText(hotel_name)
+            except Exception as e:
+                print(f"读取文件时出错: {e}")
 
 
 if __name__ == '__main__':
