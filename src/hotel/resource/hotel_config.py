@@ -1,6 +1,5 @@
 import json
 import os
-import sys
 import pandas as pd
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
@@ -9,6 +8,13 @@ from PyQt5.QtWidgets import (
     QHBoxLayout, QMessageBox, QDialog, QVBoxLayout, QComboBox, QPushButton, QLabel, QLineEdit, QTableWidget
 )
 from api.server_request import fetch_hotel_list, fetch_hotel_rooms_no
+import sys
+import serial
+import serial.tools.list_ports
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, QFileDialog, QLabel
+from PyQt5.QtCore import QThread, pyqtSignal
+import datetime
+from openpyxl import Workbook
 
 
 def extract_project_name(file_name):
@@ -86,31 +92,178 @@ def show_room_selection_dialog(room_no_list):
     return None
 
 
+class SerialThread(QThread):
+    data_received = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
+
+    def __init__(self, port_name, baud_rate=2000000):
+        super().__init__()
+        self.port_name = port_name
+        self.baud_rate = baud_rate
+        self.ser = None
+        self.buffer = ""  # 数据缓冲区
+        self.is_running = True  # 控制线程运行的标志
+
+    def run(self):
+        try:
+            self.ser = serial.Serial(self.port_name, self.baud_rate, timeout=1)
+            while self.is_running:
+                if self.ser.in_waiting > 0:
+                    data = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    if data:
+                        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        formatted_data = f"{timestamp} - {data}"
+                        self.data_received.emit(formatted_data)
+                        self.buffer += formatted_data + "\n"
+        except Exception as e:
+            self.error_occurred.emit(str(e))
+        finally:
+            if self.ser and self.ser.is_open:
+                self.ser.close()
+
+    def stop(self):
+        self.is_running = False
+        if self.ser and self.ser.is_open:
+            self.ser.close()
+
+
+class SerialPortTab(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.thread = None
+        self.received_data = []
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        # 串口号选择
+        port_layout = QHBoxLayout()
+        port_label = QLabel("Select Port:")
+        self.port_combo = QComboBox()
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            self.port_combo.addItem(port.device)
+        port_layout.addWidget(port_label)
+        port_layout.addWidget(self.port_combo)
+
+        # 波特率选择
+        baud_layout = QHBoxLayout()
+        baud_label = QLabel("Baud Rate:")
+        self.baud_combo = QComboBox()
+        self.baud_combo.addItems(['9600', '19200', '38400', '57600', '115200', '2000000'])
+        self.baud_combo.setCurrentText('2000000')
+        baud_layout.addWidget(baud_label)
+        baud_layout.addWidget(self.baud_combo)
+
+        # 开始/停止按钮
+        button_layout = QHBoxLayout()
+        self.start_button = QPushButton("Start")
+        self.start_button.clicked.connect(self.start_serial)
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.clicked.connect(self.stop_serial)
+        button_layout.addWidget(self.start_button)
+        button_layout.addWidget(self.stop_button)
+
+        # 显示区域
+        self.text_edit = QTextEdit()
+        self.text_edit.setReadOnly(True)
+
+        # 导出按钮
+        export_layout = QHBoxLayout()
+        self.export_button = QPushButton("Export to Excel")
+        self.export_button.clicked.connect(self.export_to_excel)
+        export_layout.addWidget(self.export_button)
+
+        # 清除按钮
+        clear_layout = QHBoxLayout()
+        self.clear_button = QPushButton("Clear Output")
+        self.clear_button.clicked.connect(self.clear_output)
+        clear_layout.addWidget(self.clear_button)
+
+        layout.addLayout(port_layout)
+        layout.addLayout(baud_layout)
+        layout.addLayout(button_layout)
+        layout.addWidget(self.text_edit)
+        layout.addLayout(export_layout)
+        layout.addLayout(clear_layout)
+
+        self.setLayout(layout)
+
+    def start_serial(self):
+        if not self.thread or not self.thread.isRunning():
+            print('start_serial')
+            port_name = self.port_combo.currentText()
+            baud_rate = int(self.baud_combo.currentText())
+            self.thread = SerialThread(port_name, baud_rate)
+            self.thread.data_received.connect(self.update_text_edit)
+            self.thread.error_occurred.connect(self.show_error)
+            self.thread.start()
+            print(f"串口 {port_name} 以波特率 {baud_rate} 开始读取数据。")
+            self.start_button.setEnabled(False)
+            self.stop_button.setEnabled(True)
+
+    def stop_serial(self):
+        if self.thread and self.thread.isRunning():
+            self.thread.stop()
+            self.thread.wait()
+            self.thread = None
+            self.start_button.setEnabled(True)
+            self.stop_button.setEnabled(False)
+
+    def update_text_edit(self, data):
+        self.text_edit.append(data)
+        self.received_data.append(data)
+
+    def show_error(self, error_msg):
+        QMessageBox.critical(None, "Error", f"An error occurred: {error_msg}")
+
+    def export_to_excel(self):
+        if not self.received_data:
+            return
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Timestamp", "Data"])
+        for line in self.received_data:
+            timestamp, data = line.split(" - ", 1)
+            sheet.append([timestamp, data])
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx)")
+        if file_path:
+            workbook.save(file_path)
+
+    def clear_output(self):
+        self.text_edit.clear()
+        self.received_data = []
+
+
+# 修改 PanelPreDebugTool 类以包含新的 Tab 页面
 class PanelPreDebugTool(QMainWindow):
     def __init__(self):
         super().__init__()
         ui_file_path = os.path.join(os.path.dirname(__file__), 'panel.ui')
         uic.loadUi(ui_file_path, self)
-
         self.sidebar_list.itemClicked.connect(self.show_page)
         self.import_button.clicked.connect(self.import_order_info)
         self.select_devices_button.clicked.connect(self.on_select_devices_clicked)
-
         self.order_info = None
-
         self.init_config_interface()
+        self.add_serial_port_tab()  # 添加串口Tab页面
+
+    def add_serial_port_tab(self):
+        # 获取 QTabWidget 实例
+        tab_widget = self.serial_port_tab
+        # 创建 SerialPortTab 实例
+        serial_tab = SerialPortTab()
+        # 将 SerialPortTab 实例添加到 QTabWidget 中
+        tab_widget.addTab(serial_tab, "串口设置")
 
     def init_config_interface(self):
         self.config_widget = QWidget()
         config_layout = QVBoxLayout(self.config_widget)
-
-        # 创建表格部件
         self.table_widget = QTableWidget()
-        # 初始设置两列，后续根据负载情况添加列
-        self.table_widget.setColumnCount(2)
-        self.table_widget.setHorizontalHeaderLabels(["设备信息", "产品型号"])
+        self.table_widget.setColumnCount(3)
+        self.table_widget.setHorizontalHeaderLabels(["设备信息", "产品型号", "设备MAC地址"])
         config_layout.addWidget(self.table_widget)
-
         self.stacked_widget.insertWidget(1, self.config_widget)
 
     def show_page(self, item):
@@ -247,8 +400,8 @@ class PanelPreDebugTool(QMainWindow):
         all_loads = sorted(all_loads)
 
         # 设置列数和表头
-        self.table_widget.setColumnCount(3 + len(all_loads))
-        headers = ["设备信息", "产品型号", "负载"] + all_loads
+        self.table_widget.setColumnCount(4 + len(all_loads))
+        headers = ["设备信息", "产品型号", "设备MAC地址", "负载"] + all_loads
         self.table_widget.setHorizontalHeaderLabels(headers)
 
         total_rows = 0
@@ -268,14 +421,16 @@ class PanelPreDebugTool(QMainWindow):
         for device in selected_devices:
             device_info = device[5]
             product_model = device[3]
+            device_mac = device[4]  # 假设设备MAC地址在第5列（索引为4）
             load_str = device[7]
             has_load = False
             for load in fixed_loads:
                 if load in load_str:
                     self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
                     self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
-                    self.table_widget.setItem(current_row, 2, QTableWidgetItem(load))
-                    for col, load_col in enumerate(all_loads, start=3):
+                    self.table_widget.setItem(current_row, 2, QTableWidgetItem(device_mac))
+                    self.table_widget.setItem(current_row, 3, QTableWidgetItem(load))
+                    for col, load_col in enumerate(all_loads, start=4):
                         if load_col == load:
                             self.table_widget.setItem(current_row, col, QTableWidgetItem("√"))
                         else:
@@ -285,8 +440,9 @@ class PanelPreDebugTool(QMainWindow):
             if not has_load:
                 self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
                 self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
-                self.table_widget.setItem(current_row, 2, QTableWidgetItem(""))
-                for col in range(3, 3 + len(all_loads)):
+                self.table_widget.setItem(current_row, 2, QTableWidgetItem(device_mac))
+                self.table_widget.setItem(current_row, 3, QTableWidgetItem(""))
+                for col in range(4, 4 + len(all_loads)):
                     self.table_widget.setItem(current_row, col, QTableWidgetItem(""))
                 current_row += 1
 

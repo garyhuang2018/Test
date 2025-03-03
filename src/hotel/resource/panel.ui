@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1163</width>
-    <height>595</height>
+    <width>1236</width>
+    <height>630</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,81 +16,106 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout">
     <item>
-     <widget class="QListWidget" name="sidebar_list">
-      <property name="minimumSize">
-       <size>
-        <width>200</width>
-        <height>0</height>
-       </size>
+     <widget class="QTabWidget" name="serial_port_tab">
+      <property name="currentIndex">
+       <number>0</number>
       </property>
-      <property name="maximumSize">
-       <size>
-        <width>200</width>
-        <height>16777215</height>
-       </size>
-      </property>
-      <item>
-       <property name="text">
-        <string>获取订单交付信息</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>选择并准备自动化配置工具</string>
-       </property>
-      </item>
-      <item>
-       <property name="text">
-        <string>工具初始化与设备连接</string>
-       </property>
-      </item>
-     </widget>
-    </item>
-    <item>
-     <widget class="QStackedWidget" name="stacked_widget">
-      <widget class="QWidget" name="page_1">
-       <layout class="QVBoxLayout" name="verticalLayout_1">
+      <widget class="QWidget" name="tab_3">
+       <attribute name="title">
+        <string>主面板</string>
+       </attribute>
+       <widget class="QStackedWidget" name="stacked_widget">
+        <property name="geometry">
+         <rect>
+          <x>190</x>
+          <y>10</y>
+          <width>991</width>
+          <height>531</height>
+         </rect>
+        </property>
+        <widget class="QWidget" name="page_1">
+         <layout class="QVBoxLayout" name="verticalLayout_1">
+          <item>
+           <widget class="QPushButton" name="import_button">
+            <property name="text">
+             <string>导入订单信息</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="select_devices_button">
+            <property name="text">
+             <string>选择预调试设备</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QTableWidget" name="tableWidget"/>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="page_2">
+         <layout class="QVBoxLayout" name="verticalLayout_2">
+          <item>
+           <widget class="QLabel" name="label_2">
+            <property name="text">
+             <string>选择自动化配置工具</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+        <widget class="QWidget" name="page_3">
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <widget class="QLabel" name="label_3">
+            <property name="text">
+             <string>工具初始化与设备连接</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </widget>
+       <widget class="QListWidget" name="sidebar_list">
+        <property name="geometry">
+         <rect>
+          <x>0</x>
+          <y>0</y>
+          <width>200</width>
+          <height>531</height>
+         </rect>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>200</width>
+          <height>0</height>
+         </size>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>200</width>
+          <height>16777215</height>
+         </size>
+        </property>
         <item>
-         <widget class="QPushButton" name="import_button">
-          <property name="text">
-           <string>导入订单信息</string>
-          </property>
-         </widget>
+         <property name="text">
+          <string>获取订单交付信息</string>
+         </property>
         </item>
         <item>
-         <widget class="QPushButton" name="select_devices_button">
-          <property name="text">
-           <string>选择预调试设备</string>
-          </property>
-         </widget>
+         <property name="text">
+          <string>选择并准备自动化配置工具</string>
+         </property>
         </item>
         <item>
-         <widget class="QTableWidget" name="tableWidget"/>
+         <property name="text">
+          <string>工具初始化与设备连接</string>
+         </property>
         </item>
-       </layout>
+       </widget>
       </widget>
-      <widget class="QWidget" name="page_2">
-       <layout class="QVBoxLayout" name="verticalLayout_2">
-        <item>
-         <widget class="QLabel" name="label_2">
-          <property name="text">
-           <string>选择自动化配置工具</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
-      <widget class="QWidget" name="page_3">
-       <layout class="QVBoxLayout" name="verticalLayout_3">
-        <item>
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>工具初始化与设备连接</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </widget>
+
      </widget>
     </item>
    </layout>
@@ -100,7 +125,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1163</width>
+     <width>1236</width>
      <height>23</height>
     </rect>
    </property>
