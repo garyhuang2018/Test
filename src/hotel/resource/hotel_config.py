@@ -106,8 +106,9 @@ class PanelPreDebugTool(QMainWindow):
 
         # 创建表格部件
         self.table_widget = QTableWidget()
-        self.table_widget.setColumnCount(3)
-        self.table_widget.setHorizontalHeaderLabels(["设备信息", "产品型号", "负载"])
+        # 初始设置两列，后续根据负载情况添加列
+        self.table_widget.setColumnCount(2)
+        self.table_widget.setHorizontalHeaderLabels(["设备信息", "产品型号"])
         config_layout.addWidget(self.table_widget)
 
         self.stacked_widget.insertWidget(1, self.config_widget)
@@ -236,6 +237,20 @@ class PanelPreDebugTool(QMainWindow):
     def fill_table(self, selected_devices):
         # 固定的负载名称列表
         fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带"]
+        # 找出所有出现的负载
+        all_loads = set()
+        for device in selected_devices:
+            load_str = device[7]
+            for load in fixed_loads:
+                if load in load_str:
+                    all_loads.add(load)
+        all_loads = sorted(all_loads)
+
+        # 设置列数和表头
+        self.table_widget.setColumnCount(3 + len(all_loads))
+        headers = ["设备信息", "产品型号", "负载"] + all_loads
+        self.table_widget.setHorizontalHeaderLabels(headers)
+
         total_rows = 0
         # 先计算总共需要的行数
         for device in selected_devices:
@@ -260,12 +275,19 @@ class PanelPreDebugTool(QMainWindow):
                     self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
                     self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
                     self.table_widget.setItem(current_row, 2, QTableWidgetItem(load))
+                    for col, load_col in enumerate(all_loads, start=3):
+                        if load_col == load:
+                            self.table_widget.setItem(current_row, col, QTableWidgetItem("√"))
+                        else:
+                            self.table_widget.setItem(current_row, col, QTableWidgetItem(""))
                     current_row += 1
                     has_load = True
             if not has_load:
                 self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
                 self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
                 self.table_widget.setItem(current_row, 2, QTableWidgetItem(""))
+                for col in range(3, 3 + len(all_loads)):
+                    self.table_widget.setItem(current_row, col, QTableWidgetItem(""))
                 current_row += 1
 
         # 合并相同产品名称和型号的单元格
