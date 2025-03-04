@@ -1,5 +1,7 @@
 import json
 import os
+import re
+
 import pandas as pd
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
@@ -128,6 +130,8 @@ class SerialThread(QThread):
 
 
 class SerialPortTab(QWidget):
+    # 新增状态更新信号
+    status_updated = pyqtSignal(str)
     def __init__(self):
         super().__init__()
         self.initUI()
@@ -190,6 +194,35 @@ class SerialPortTab(QWidget):
 
         self.setLayout(layout)
 
+    def filter_device_ids(self):
+        print('filter')
+        mac_set = set()  # 使用集合来存储 MAC 地址以实现去重
+        mac_pattern = re.compile(r'([0-9A-Fa-f]{12})')  # 正则表达式模式，用于匹配 12 位十六进制字符的 MAC 地址
+        for line in self.received_data:
+            # 跳过包含 'RP' 的行
+            if 'RP' in line:
+                continue
+            matches = mac_pattern.findall(line)
+            for match in matches:
+                # 将 MAC 地址转换为标准格式，如 XX:XX:XX:XX:XX:XX
+                mac_address = ':'.join([match[i:i + 2] for i in range(0, len(match), 2)])
+                mac_set.add(mac_address)  # 将 MAC 地址添加到集合中
+
+        mac_list = list(mac_set)  # 将集合转换为列表
+        return mac_list
+
+    # def filter_mac_data(self):
+    #     print('filter')
+    #     """从接收到的数据中提取所有MAC地址并去重"""
+    #     pattern = re.compile(r'(?i)([0-9a-f]{2}[:-]){5}[0-9a-f]{2}')
+    #     mac_list = []
+    #     for line in self.received_data:
+    #         matches = pattern.findall(line)
+    #         mac_list.extend(matches)
+    #     # 去重并按格式排序
+    #     mac_list = sorted(list(set(mac_list)), key=lambda x: x.lower())
+    #     return mac_list
+
     def start_serial(self):
         if not self.thread or not self.thread.isRunning():
             print('start_serial')
@@ -204,6 +237,7 @@ class SerialPortTab(QWidget):
             self.stop_button.setEnabled(True)
 
     def stop_serial(self):
+
         if self.thread and self.thread.isRunning():
             self.thread.stop()
             self.thread.wait()
@@ -219,8 +253,15 @@ class SerialPortTab(QWidget):
         QMessageBox.critical(None, "Error", f"An error occurred: {error_msg}")
 
     def export_to_excel(self):
+        self.stop_serial()  # 新增：停止串口数据接收
+        """导出接收数据和设备ID列表到Excel"""
         if not self.received_data:
+            self.status_updated.emit("没有数据可导出。")
             return
+        # 创建设备ID表（如果存在）
+        device_ids = self.filter_device_ids()
+        if device_ids:
+            print(device_ids)
         workbook = Workbook()
         sheet = workbook.active
         sheet.append(["Timestamp", "Data"])
@@ -388,6 +429,10 @@ class PanelPreDebugTool(QMainWindow):
         self.statusBar().showMessage(status_message)
 
     def fill_table(self, selected_devices):
+
+        # 获取过滤后的MAC数据列表
+        mac_list = None
+        # mac_list = None
         # 固定的负载名称列表
         fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带"]
         # 找出所有出现的负载
@@ -421,14 +466,20 @@ class PanelPreDebugTool(QMainWindow):
         for device in selected_devices:
             device_info = device[5]
             product_model = device[3]
-            device_mac = device[4]  # 假设设备MAC地址在第5列（索引为4）
             load_str = device[7]
             has_load = False
             for load in fixed_loads:
                 if load in load_str:
                     self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
                     self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
-                    self.table_widget.setItem(current_row, 2, QTableWidgetItem(device_mac))
+                    if mac_list:
+                        # 创建下拉列表
+                        combo_box = QComboBox()
+                        combo_box.addItems(mac_list)
+                        self.table_widget.setCellWidget(current_row, 2, combo_box)
+                    else:
+                        # MAC 地址为空时显示提示信息
+                        self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址"))
                     self.table_widget.setItem(current_row, 3, QTableWidgetItem(load))
                     for col, load_col in enumerate(all_loads, start=4):
                         if load_col == load:
@@ -440,7 +491,14 @@ class PanelPreDebugTool(QMainWindow):
             if not has_load:
                 self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
                 self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
-                self.table_widget.setItem(current_row, 2, QTableWidgetItem(device_mac))
+                if mac_list:
+                    # 创建下拉列表
+                    combo_box = QComboBox()
+                    combo_box.addItems(mac_list)
+                    self.table_widget.setCellWidget(current_row, 2, combo_box)
+                else:
+                    # MAC 地址为空时显示提示信息
+                    self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址"))
                 self.table_widget.setItem(current_row, 3, QTableWidgetItem(""))
                 for col in range(4, 4 + len(all_loads)):
                     self.table_widget.setItem(current_row, col, QTableWidgetItem(""))
