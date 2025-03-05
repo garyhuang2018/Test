@@ -18,6 +18,8 @@ from PyQt5.QtCore import QThread, pyqtSignal
 import datetime
 from openpyxl import Workbook
 
+MAC_LIST = "mac_address_list.txt"
+
 
 def extract_project_name(file_name):
     if "项目交付文档" in file_name:
@@ -137,6 +139,7 @@ class SerialPortTab(QWidget):
         self.initUI()
         self.thread = None
         self.received_data = []
+        self.mac_list_file = "mac_address_list.txt"  # 固定文件名
 
     def initUI(self):
         layout = QVBoxLayout()
@@ -222,6 +225,16 @@ class SerialPortTab(QWidget):
     #     # 去重并按格式排序
     #     mac_list = sorted(list(set(mac_list)), key=lambda x: x.lower())
     #     return mac_list
+    def export_mac_list_to_file(self):
+        """将 filter_device_ids 方法获取的列表输出到固定文件名的文本文档"""
+        mac_list = self.filter_device_ids()
+        try:
+            with open(self.mac_list_file, 'w') as file:
+                for mac in mac_list:
+                    file.write(mac + '\n')
+            print(f"MAC 地址列表已成功保存到 {self.mac_list_file}")
+        except Exception as e:
+            print(f"保存 MAC 地址列表时出错: {e}")
 
     def start_serial(self):
         if not self.thread or not self.thread.isRunning():
@@ -258,10 +271,11 @@ class SerialPortTab(QWidget):
         if not self.received_data:
             self.status_updated.emit("没有数据可导出。")
             return
-        # 创建设备ID表（如果存在）
-        device_ids = self.filter_device_ids()
-        if device_ids:
-            print(device_ids)
+        # # 创建设备ID表（如果存在）
+        # device_ids = self.filter_device_ids()
+        # if device_ids:
+        #     print(device_ids)
+        self.export_mac_list_to_file()
         workbook = Workbook()
         sheet = workbook.active
         sheet.append(["Timestamp", "Data"])
@@ -429,10 +443,14 @@ class PanelPreDebugTool(QMainWindow):
         self.statusBar().showMessage(status_message)
 
     def fill_table(self, selected_devices):
-
-        # 获取过滤后的MAC数据列表
-        mac_list = None
-        # mac_list = None
+        try:
+            # 读取保存 MAC 地址列表的文件
+            with open(MAC_LIST, 'r') as file:
+                mac_list = [line.strip() for line in file.readlines()]
+            print("读取到的 MAC 地址列表:", mac_list)
+            # 可以在这里将 mac_list 传递给需要使用的方法，例如 fill_table
+        except FileNotFoundError:
+            print(f"未找到保存 MAC 地址列表的文件 {MAC_LIST}")
         # 固定的负载名称列表
         fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带"]
         # 找出所有出现的负载
