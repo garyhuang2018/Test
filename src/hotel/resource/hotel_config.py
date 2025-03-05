@@ -448,17 +448,43 @@ class PanelPreDebugTool(QMainWindow):
             with open(MAC_LIST, 'r') as file:
                 mac_list = [line.strip() for line in file.readlines()]
             print("读取到的 MAC 地址列表:", mac_list)
-            # 可以在这里将 mac_list 传递给需要使用的方法，例如 fill_table
         except FileNotFoundError:
             print(f"未找到保存 MAC 地址列表的文件 {MAC_LIST}")
         # 固定的负载名称列表
-        fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带"]
+        fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带", "床头灯", "明亮模式", "窗帘开", "吊灯", "睡眠模式", "窗帘关"]
         # 找出所有出现的负载
         all_loads = set()
+        # 定义匹配中文的正则表达式
+        chinese_pattern = re.compile(r'[\u4e00-\u9fa5]+')
+        # 找到包含“刻字”的列索引
+        load_column_index = None
+        device_info_column_index = None
+        product_model_index = None
+        if hasattr(self, 'tableWidget'):
+            headers = [self.tableWidget.horizontalHeaderItem(i).text() for i in range(self.tableWidget.columnCount())]
+            for i, header in enumerate(headers):
+                if "刻字" in header:
+                    load_column_index = i -1
+                    print(i)
+                if "产品类型" in header:
+                    device_info_column_index = i - 1
+                if "产品型号" in header:
+                    product_model_index = i - 1
+        if load_column_index is None:
+            print("未找到包含“刻字”的列。")
+            return
+        if device_info_column_index is None:
+            print("未找到包含“产品类型”的列。")
+            return
+        if product_model_index is None:
+            print("未找到包含“产品型号”的列。")
+            return
         for device in selected_devices:
-            load_str = device[7]
+            load_str = device[load_column_index]
             for load in fixed_loads:
-                if load in load_str:
+                # 查找负载名称中的中文部分
+                chinese_load = ''.join(chinese_pattern.findall(load))
+                if chinese_load and chinese_load in load_str:
                     all_loads.add(load)
         all_loads = sorted(all_loads)
 
@@ -470,10 +496,13 @@ class PanelPreDebugTool(QMainWindow):
         total_rows = 0
         # 先计算总共需要的行数
         for device in selected_devices:
-            load_str = device[7]
+            load_str = device[load_column_index]
             has_load = False
             for load in fixed_loads:
-                if load in load_str:
+                # 查找负载名称中的中文部分
+                chinese_load = ''.join(chinese_pattern.findall(load))
+                print(load_str, chinese_load)
+                if chinese_load and chinese_load in load_str:
                     total_rows += 1
                     has_load = True
             if not has_load:
@@ -482,12 +511,14 @@ class PanelPreDebugTool(QMainWindow):
         self.table_widget.setRowCount(total_rows)
         current_row = 0
         for device in selected_devices:
-            device_info = device[5]
-            product_model = device[3]
-            load_str = device[7]
+            device_info = device[device_info_column_index]
+            product_model = device[product_model_index]
+            load_str = device[load_column_index]
             has_load = False
             for load in fixed_loads:
-                if load in load_str:
+                # 查找负载名称中的中文部分
+                chinese_load = ''.join(chinese_pattern.findall(load))
+                if chinese_load and chinese_load in load_str:
                     self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
                     self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
                     if mac_list:
@@ -542,7 +573,14 @@ class PanelPreDebugTool(QMainWindow):
                     break
                 next_row += 1
             current_row = next_row
-
+        # # 加长 MAC 地址列的宽度
+        # mac_address_column_index = 2
+        # mac_address_column_width = 160  # 可根据实际需求调整宽度值
+        # self.table_widget.setColumnWidth(mac_address_column_index, mac_address_column_width)
+        # 设置各列宽度
+        column_widths = [100, 80, 120, 80] + [60] * len(all_loads)
+        for col, width in enumerate(column_widths):
+            self.table_widget.setColumnWidth(col, width)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
