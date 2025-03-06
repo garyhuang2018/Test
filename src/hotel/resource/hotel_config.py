@@ -451,13 +451,15 @@ class PanelPreDebugTool(QMainWindow):
         except FileNotFoundError:
             print(f"未找到保存 MAC 地址列表的文件 {MAC_LIST}")
         # 固定的负载名称列表
-        fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带", "床头灯", "明亮模式", "窗帘开", "吊灯", "睡眠模式", "窗帘关"]
+        fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带", "床头灯", "明亮模式", "窗帘开", "吊灯", "睡眠模式", "排气扇", "窗帘关", "玄关灯"]
         # 找出所有出现的负载
         all_loads = set()
         # 定义匹配中文的正则表达式
         chinese_pattern = re.compile(r'[\u4e00-\u9fa5]+')
+
         # 找到包含“刻字”的列索引
         load_column_index = None
+        # 找到包含“产品类型”的列索引
         device_info_column_index = None
         product_model_index = None
         if hasattr(self, 'tableWidget'):
@@ -499,10 +501,7 @@ class PanelPreDebugTool(QMainWindow):
             load_str = device[load_column_index]
             has_load = False
             for load in fixed_loads:
-                # 查找负载名称中的中文部分
-                chinese_load = ''.join(chinese_pattern.findall(load))
-                print(load_str, chinese_load)
-                if chinese_load and chinese_load in load_str:
+                if load in load_str:
                     total_rows += 1
                     has_load = True
             if not has_load:
@@ -510,11 +509,13 @@ class PanelPreDebugTool(QMainWindow):
 
         self.table_widget.setRowCount(total_rows)
         current_row = 0
+        row_groups = []  # 用于记录每行负载所属的原始行分组
         for device in selected_devices:
             device_info = device[device_info_column_index]
             product_model = device[product_model_index]
             load_str = device[load_column_index]
             has_load = False
+            group = []
             for load in fixed_loads:
                 # 查找负载名称中的中文部分
                 chinese_load = ''.join(chinese_pattern.findall(load))
@@ -531,6 +532,9 @@ class PanelPreDebugTool(QMainWindow):
                         self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址"))
                     self.table_widget.setItem(current_row, 3, QTableWidgetItem(load))
                     for col, load_col in enumerate(all_loads, start=4):
+                        item = QTableWidgetItem()
+                        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+                        item.setCheckState(Qt.Unchecked)
                         if load_col == load:
                             self.table_widget.setItem(current_row, col, QTableWidgetItem("√"))
                         else:
@@ -552,35 +556,28 @@ class PanelPreDebugTool(QMainWindow):
                 for col in range(4, 4 + len(all_loads)):
                     self.table_widget.setItem(current_row, col, QTableWidgetItem(""))
                 current_row += 1
+            row_groups.append(group)
 
-        # 合并相同产品名称和型号的单元格
-        current_row = 0
-        while current_row < self.table_widget.rowCount():
-            device_info = self.table_widget.item(current_row, 0).text()
-            product_model = self.table_widget.item(current_row, 1).text()
-            span = 1
-            next_row = current_row + 1
-            while next_row < self.table_widget.rowCount():
-                next_device_info = self.table_widget.item(next_row, 0).text()
-                next_product_model = self.table_widget.item(next_row, 1).text()
-                if next_device_info == device_info and next_product_model == product_model:
-                    span += 1
-                    # 隐藏后续相同的单元格
-                    for col in range(2):
-                        self.table_widget.setSpan(current_row, col, span, 1)
-                        self.table_widget.item(next_row, col).setFlags(Qt.NoItemFlags)
-                else:
-                    break
-                next_row += 1
-            current_row = next_row
-        # # 加长 MAC 地址列的宽度
-        # mac_address_column_index = 2
-        # mac_address_column_width = 160  # 可根据实际需求调整宽度值
-        # self.table_widget.setColumnWidth(mac_address_column_index, mac_address_column_width)
+        # 合并同一原始行的单元格
+        for group in row_groups:
+            if len(group) > 1:
+                first_row = group[0]
+                span = len(group)
+                for col in range(3):  # 合并设备信息、产品型号、设备MAC地址列
+                    self.table_widget.setSpan(first_row, col, span, 1)
+                    for row in group[1:]:
+                        if col < 2:
+                            self.table_widget.item(row, col).setFlags(Qt.NoItemFlags)
+                        else:
+                            cell_widget = self.table_widget.cellWidget(row, col)
+                            if cell_widget:
+                                cell_widget.hide()
+
         # 设置各列宽度
         column_widths = [100, 80, 120, 80] + [60] * len(all_loads)
         for col, width in enumerate(column_widths):
             self.table_widget.setColumnWidth(col, width)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
