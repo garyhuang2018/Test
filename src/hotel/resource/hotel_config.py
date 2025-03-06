@@ -507,8 +507,25 @@ class PanelPreDebugTool(QMainWindow):
             if not has_load:
                 total_rows += 1
 
+        # 额外增加一行用于下拉选项
+        total_rows += 1
         self.table_widget.setRowCount(total_rows)
-        current_row = 0
+
+        # 插入下拉选项行到列名下面第一行
+        insert_row_index = 1
+        self.table_widget.insertRow(insert_row_index)
+
+        # 清空插入行对应 "设备信息", "产品型号", "设备MAC地址", "负载" 列
+        for col in range(4):
+            self.table_widget.setItem(insert_row_index, col, QTableWidgetItem(""))
+
+        # 在插入行添加 L1、L2、L3、L4 下拉选项
+        for col in range(4, 4 + len(all_loads)):
+            combo_box = QComboBox()
+            combo_box.addItems(["L1", "L2", "L3", "L4"])
+            self.table_widget.setCellWidget(insert_row_index, col, combo_box)
+
+        current_row = insert_row_index + 1
         row_groups = []  # 用于记录每行负载所属的原始行分组
         for device in selected_devices:
             device_info = device[device_info_column_index]
@@ -536,6 +553,7 @@ class PanelPreDebugTool(QMainWindow):
                         if load_col == load:
                             item.setText("√")
                         self.table_widget.setItem(current_row, col, item)
+                    group.append(current_row)
                     current_row += 1
                     has_load = True
             if not has_load:
@@ -553,13 +571,14 @@ class PanelPreDebugTool(QMainWindow):
                 for col in range(4, 4 + len(all_loads)):
                     item = QTableWidgetItem()
                     self.table_widget.setItem(current_row, col, item)
+                group.append(current_row)
                 current_row += 1
             row_groups.append(group)
 
         # 合并同一原始行的单元格
         for group in row_groups:
             if len(group) > 1:
-                first_row = group[0]
+                first_row = min(group)
                 span = len(group)
                 for col in range(3):  # 合并设备信息、产品型号、设备MAC地址列
                     self.table_widget.setSpan(first_row, col, span, 1)
@@ -580,8 +599,8 @@ class PanelPreDebugTool(QMainWindow):
         self.table_widget.cellClicked.connect(self.on_cell_clicked)
 
     def on_cell_clicked(self, row, column):
-        # 只处理负载列（从第4列开始）
-        if column >= 4:
+        # 只处理负载列（从第4列开始）且排除下拉选项行
+        if column >= 4 and row != 1:
             item = self.table_widget.item(row, column)
             if item:
                 text = item.text()
