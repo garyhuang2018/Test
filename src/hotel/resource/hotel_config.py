@@ -466,7 +466,7 @@ class PanelPreDebugTool(QMainWindow):
             headers = [self.tableWidget.horizontalHeaderItem(i).text() for i in range(self.tableWidget.columnCount())]
             for i, header in enumerate(headers):
                 if "刻字" in header:
-                    load_column_index = i -1
+                    load_column_index = i - 1
                     print(i)
                 if "产品类型" in header:
                     device_info_column_index = i - 1
@@ -533,12 +533,9 @@ class PanelPreDebugTool(QMainWindow):
                     self.table_widget.setItem(current_row, 3, QTableWidgetItem(load))
                     for col, load_col in enumerate(all_loads, start=4):
                         item = QTableWidgetItem()
-                        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-                        item.setCheckState(Qt.Unchecked)
                         if load_col == load:
-                            self.table_widget.setItem(current_row, col, QTableWidgetItem("√"))
-                        else:
-                            self.table_widget.setItem(current_row, col, QTableWidgetItem(""))
+                            item.setText("√")
+                        self.table_widget.setItem(current_row, col, item)
                     current_row += 1
                     has_load = True
             if not has_load:
@@ -554,7 +551,8 @@ class PanelPreDebugTool(QMainWindow):
                     self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址"))
                 self.table_widget.setItem(current_row, 3, QTableWidgetItem(""))
                 for col in range(4, 4 + len(all_loads)):
-                    self.table_widget.setItem(current_row, col, QTableWidgetItem(""))
+                    item = QTableWidgetItem()
+                    self.table_widget.setItem(current_row, col, item)
                 current_row += 1
             row_groups.append(group)
 
@@ -574,9 +572,25 @@ class PanelPreDebugTool(QMainWindow):
                                 cell_widget.hide()
 
         # 设置各列宽度
-        column_widths = [100, 80, 120, 80] + [60] * len(all_loads)
+        column_widths = [100, 80, 120, 80] + [50] * len(all_loads)
         for col, width in enumerate(column_widths):
             self.table_widget.setColumnWidth(col, width)
+
+        # 连接单元格点击信号到槽函数
+        self.table_widget.cellClicked.connect(self.on_cell_clicked)
+
+    def on_cell_clicked(self, row, column):
+        # 只处理负载列（从第4列开始）
+        if column >= 4:
+            item = self.table_widget.item(row, column)
+            if item:
+                text = item.text()
+                if text == "":
+                    item.setText("√")
+                elif text == "√":
+                    item.setText("X")
+                else:
+                    item.setText("")
 
 
 if __name__ == "__main__":
