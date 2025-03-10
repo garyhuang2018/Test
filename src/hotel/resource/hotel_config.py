@@ -5,10 +5,7 @@ import re
 import pandas as pd
 from PyQt5 import uic
 from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QFileDialog, QTableWidgetItem, QCheckBox, QWidget,
-    QHBoxLayout, QMessageBox, QDialog, QVBoxLayout, QComboBox, QPushButton, QLabel, QLineEdit, QTableWidget
-)
+import PyQt5.QtWidgets
 from api.server_request import fetch_hotel_list, fetch_hotel_rooms_no
 import sys
 import serial
@@ -44,7 +41,7 @@ def match_project_with_hotels(project_name, hotel_list_data):
     if project_name:
         for hotel in hotel_list:
             if 'hotelName' in hotel and hotel['hotelName'] == project_name:
-                QMessageBox.information(None, "匹配结果", f"匹配成功！文件名中的项目 '{project_name}' 在酒店列表中找到。")
+                PyQt5.QtWidgets.QMessageBox.information(None, "匹配结果", f"匹配成功！文件名中的项目 '{project_name}' 在酒店列表中找到。")
                 return hotel
         hotel_names = [hotel['hotelName'] for hotel in hotel_list]
         selected_hotel = show_hotel_selection_dialog(hotel_names)
@@ -53,12 +50,12 @@ def match_project_with_hotels(project_name, hotel_list_data):
                 if hotel['hotelName'] == selected_hotel:
                     return hotel
     else:
-        QMessageBox.warning(None, "匹配结果", "未能从文件名中提取到项目名称。")
+        PyQt5.QtWidgets.QMessageBox.warning(None, "匹配结果", "未能从文件名中提取到项目名称。")
     return None
 
 
 def show_hotel_selection_dialog(hotel_names):
-    dialog = QDialog()
+    dialog = PyQt5.QtWidgets.QDialog()
     dialog.setWindowTitle("选择酒店")
     layout = QVBoxLayout()
 
@@ -71,13 +68,13 @@ def show_hotel_selection_dialog(hotel_names):
     layout.addWidget(ok_button)
 
     dialog.setLayout(layout)
-    if dialog.exec_() == QDialog.Accepted:
+    if dialog.exec_() == PyQt5.QtWidgets.QDialog.Accepted:
         return combo_box.currentText()
     return None
 
 
 def show_room_selection_dialog(room_no_list):
-    dialog = QDialog()
+    dialog = PyQt5.QtWidgets.QDialog()
     dialog.setMinimumWidth(250)
     dialog.setWindowTitle("选择要调试的房间")
     layout = QVBoxLayout()
@@ -91,7 +88,7 @@ def show_room_selection_dialog(room_no_list):
     layout.addWidget(ok_button)
 
     dialog.setLayout(layout)
-    if dialog.exec_() == QDialog.Accepted:
+    if dialog.exec_() == PyQt5.QtWidgets.QDialog.Accepted:
         return combo_box.currentText()
     return None
 
@@ -263,7 +260,7 @@ class SerialPortTab(QWidget):
         self.received_data.append(data)
 
     def show_error(self, error_msg):
-        QMessageBox.critical(None, "Error", f"An error occurred: {error_msg}")
+        PyQt5.QtWidgets.QMessageBox.critical(None, "Error", f"An error occurred: {error_msg}")
 
     def export_to_excel(self):
         self.stop_serial()  # 新增：停止串口数据接收
@@ -292,7 +289,7 @@ class SerialPortTab(QWidget):
 
 
 # 修改 PanelPreDebugTool 类以包含新的 Tab 页面
-class PanelPreDebugTool(QMainWindow):
+class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         ui_file_path = os.path.join(os.path.dirname(__file__), 'panel.ui')
@@ -303,6 +300,8 @@ class PanelPreDebugTool(QMainWindow):
         self.order_info = None
         self.init_config_interface()
         self.add_serial_port_tab()  # 添加串口Tab页面
+        self.current_hotel = ""  # 新增属性保存酒店名称
+        self.current_room = ""  # 新增属性保存房间号
 
     def add_serial_port_tab(self):
         # 获取 QTabWidget 实例
@@ -315,7 +314,26 @@ class PanelPreDebugTool(QMainWindow):
     def init_config_interface(self):
         self.config_widget = QWidget()
         config_layout = QVBoxLayout(self.config_widget)
-        self.table_widget = QTableWidget()
+
+        # 添加导出按钮
+        export_layout = QHBoxLayout()
+        self.export_table_button = QPushButton("导出表格")
+        self.export_table_button.clicked.connect(self.export_table)
+        export_layout.addWidget(self.export_table_button)
+        export_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
+        config_layout.addLayout(export_layout)
+
+        # 添加标题区域
+        title_layout = QHBoxLayout()
+        self.project_label = QLabel("")  # 创建空标签，稍后填充内容
+        self.project_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        title_layout.addWidget(self.project_label)
+        title_layout.addStretch()
+        config_layout.addLayout(title_layout)
+
+
+
+        self.table_widget = PyQt5.QtWidgets.QTableWidget()
         self.table_widget.setColumnCount(3)
         self.table_widget.setHorizontalHeaderLabels(["设备信息", "产品型号", "设备MAC地址"])
         config_layout.addWidget(self.table_widget)
@@ -370,7 +388,7 @@ class PanelPreDebugTool(QMainWindow):
             self.tableWidget.setHorizontalHeaderLabels(headers)
 
             for row in range(rows):
-                checkbox = QCheckBox()
+                checkbox = PyQt5.QtWidgets.QCheckBox()
                 widget = QWidget()
                 layout = QHBoxLayout(widget)
                 layout.addWidget(checkbox)
@@ -380,7 +398,7 @@ class PanelPreDebugTool(QMainWindow):
                 self.tableWidget.setCellWidget(row, 0, widget)
                 for col in range(columns):
                     item = str(preview_df.iloc[row, col])
-                    self.tableWidget.setItem(row, col + 1, QTableWidgetItem(item))
+                    self.tableWidget.setItem(row, col + 1, PyQt5.QtWidgets.QTableWidgetItem(item))
 
     def get_selected_rows(self):
         selected_data = []
@@ -388,7 +406,7 @@ class PanelPreDebugTool(QMainWindow):
         columns = self.tableWidget.columnCount() - 1  # 排除复选框列
         for row in range(rows):
             checkbox_widget = self.tableWidget.cellWidget(row, 0)
-            checkbox = checkbox_widget.findChild(QCheckBox)
+            checkbox = checkbox_widget.findChild(PyQt5.QtWidgets.QCheckBox)
             if checkbox.isChecked():
                 row_data = []
                 for col in range(1, columns + 1):
@@ -425,11 +443,17 @@ class PanelPreDebugTool(QMainWindow):
             print("未找到配置文件 'config/config.txt'。")
 
     def switch_to_next_stack(self, project_name, selected_room):
+        self.current_hotel = project_name
+        self.current_room = selected_room
         selected_devices = self.get_selected_rows()
         if selected_devices:
             current_index = self.stacked_widget.currentIndex()
             next_index = (current_index + 1) % self.stacked_widget.count()
             self.stacked_widget.setCurrentIndex(next_index)
+
+            # 更新标题标签
+            self.project_label.setText(f"项目名称：{project_name}    房间号：{selected_room}")
+
             self.update_statusbar(project_name, selected_room, selected_devices)
             # 填充表格数据
             self.fill_table(selected_devices)
@@ -461,9 +485,9 @@ class PanelPreDebugTool(QMainWindow):
         # 定义匹配中文的正则表达式
         chinese_pattern = re.compile(r'[\u4e00-\u9fa5]+')
 
-        # 找到包含“刻字”的列索引
+        # 找到包含"刻字"的列索引
         load_column_index = None
-        # 找到包含“产品类型”的列索引
+        # 找到包含"产品类型"的列索引
         device_info_column_index = None
         product_model_index = None
         if hasattr(self, 'tableWidget'):
@@ -494,13 +518,13 @@ class PanelPreDebugTool(QMainWindow):
                     all_loads.add(load)
         all_loads = sorted(all_loads)
 
-        # 过滤掉包含“模式”的负载列
+        # 过滤掉包含"模式"的负载列
         filtered_loads = [load for load in all_loads if "模式" not in load]
 
         # 设置列数和表头
         self.table_widget.setColumnCount(4 + len(filtered_loads))
-        # 修改表头中的 “设备MAC地址” 为 “设备MAC地址后4位”
-        headers = ["设备信息", "产品型号", "设备后4位", "负载"] + filtered_loads
+        # 修改表头中的 "设备MAC地址" 为 "设备MAC地址后4位"
+        headers = ["设备信息", "产品型号", "设备后4位", "操作位"] + filtered_loads
         self.table_widget.setHorizontalHeaderLabels(headers)
 
         total_rows = 0
@@ -525,7 +549,7 @@ class PanelPreDebugTool(QMainWindow):
 
         # 清空插入行对应 "设备信息", "产品型号", "设备MAC地址后4位", "负载" 列
         for col in range(4):
-            self.table_widget.setItem(insert_row_index, col, QTableWidgetItem(""))
+            self.table_widget.setItem(insert_row_index, col, PyQt5.QtWidgets.QTableWidgetItem(""))
 
         # 在插入行添加 L1、L2、L3、L4 下拉选项
         for col in range(4, 4 + len(filtered_loads)):
@@ -545,8 +569,8 @@ class PanelPreDebugTool(QMainWindow):
                 # 查找负载名称中的中文部分
                 chinese_load = ''.join(chinese_pattern.findall(load))
                 if chinese_load and chinese_load in load_str:
-                    self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
-                    self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
+                    self.table_widget.setItem(current_row, 0, PyQt5.QtWidgets.QTableWidgetItem(device_info))
+                    self.table_widget.setItem(current_row, 1, PyQt5.QtWidgets.QTableWidgetItem(product_model))
                     if mac_list:
                         # 创建下拉列表
                         combo_box = QComboBox()
@@ -554,10 +578,10 @@ class PanelPreDebugTool(QMainWindow):
                         self.table_widget.setCellWidget(current_row, 2, combo_box)
                     else:
                         # MAC 地址为空时显示提示信息
-                        self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址后4位"))
-                    self.table_widget.setItem(current_row, 3, QTableWidgetItem(load))
+                        self.table_widget.setItem(current_row, 2, PyQt5.QtWidgets.QTableWidgetItem("无可用 MAC 地址后4位"))
+                    self.table_widget.setItem(current_row, 3, PyQt5.QtWidgets.QTableWidgetItem(load))
                     for col, load_col in enumerate(filtered_loads, start=4):
-                        item = QTableWidgetItem()
+                        item = PyQt5.QtWidgets.QTableWidgetItem()
                         if load_col == load:
                             item.setText("√")
                         self.table_widget.setItem(current_row, col, item)
@@ -565,8 +589,8 @@ class PanelPreDebugTool(QMainWindow):
                     current_row += 1
                     has_load = True
             if not has_load:
-                self.table_widget.setItem(current_row, 0, QTableWidgetItem(device_info))
-                self.table_widget.setItem(current_row, 1, QTableWidgetItem(product_model))
+                self.table_widget.setItem(current_row, 0, PyQt5.QtWidgets.QTableWidgetItem(device_info))
+                self.table_widget.setItem(current_row, 1, PyQt5.QtWidgets.QTableWidgetItem(product_model))
                 if mac_list:
                     # 创建下拉列表
                     combo_box = QComboBox()
@@ -574,10 +598,10 @@ class PanelPreDebugTool(QMainWindow):
                     self.table_widget.setCellWidget(current_row, 2, combo_box)
                 else:
                     # MAC 地址为空时显示提示信息
-                    self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址后4位"))
-                self.table_widget.setItem(current_row, 3, QTableWidgetItem(""))
+                    self.table_widget.setItem(current_row, 2, PyQt5.QtWidgets.QTableWidgetItem("无可用 MAC 地址后4位"))
+                self.table_widget.setItem(current_row, 3, PyQt5.QtWidgets.QTableWidgetItem(""))
                 for col in range(4, 4 + len(filtered_loads)):
-                    item = QTableWidgetItem()
+                    item = PyQt5.QtWidgets.QTableWidgetItem()
                     self.table_widget.setItem(current_row, col, item)
                 group.append(current_row)
                 current_row += 1
@@ -618,6 +642,70 @@ class PanelPreDebugTool(QMainWindow):
                     item.setText("X")
                 else:
                     item.setText("")
+
+    # 添加导出表格方法
+    def export_table(self):
+        file_path, selected_filter = QFileDialog.getSaveFileName(
+            self,
+            "导出表格",
+            "",
+            "PDF Files (*.pdf);;JPEG Files (*.jpg)"
+        )
+
+        if not file_path:
+            return
+
+        # 创建整个表格的截图
+        screen = QApplication.primaryScreen()
+        screenshot = screen.grabWindow(self.table_widget.winId())
+
+        if selected_filter == "PDF Files (*.pdf)":
+            # 导出为 PDF
+            from PyQt5.QtGui import QPainter
+            from PyQt5.QtPrintSupport import QPrinter
+
+            printer = QPrinter()
+            printer.setOutputFormat(QPrinter.PdfFormat)
+            printer.setOutputFileName(file_path)
+            printer.setPageSize(QPrinter.A4)
+
+            painter = QPainter()
+            painter.begin(printer)
+
+            # 添加标题信息
+            title = f"酒店名称：{self.current_hotel}\n房间号：{self.current_room}"
+            font = painter.font()
+            font.setPointSize(12)
+            painter.setFont(font)
+            painter.drawText(50, 50, title)  # 坐标根据实际情况调整
+
+            # 计算缩放比例以适应 A4 纸张
+            scale_factor = min(
+                printer.pageRect().width() / screenshot.width(),
+                printer.pageRect().height() / screenshot.height()
+            )
+
+            painter.scale(scale_factor, scale_factor)
+            painter.drawPixmap(0, 100, screenshot)  # 调整表格位置避免覆盖标题
+            painter.end()
+
+        else:  # JPEG Files
+            from PIL import Image, ImageDraw, ImageFont
+
+            # 将截图转换为 PIL 图像
+            screenshot.save("temp_screenshot.jpg")
+            img = Image.open("temp_screenshot.jpg")
+            draw = ImageDraw.Draw(img)
+
+            # 添加标题信息
+            title = f"酒店名称：{self.current_hotel}\n房间号：{self.current_room}"
+            font = ImageFont.truetype("arial.ttf", 16)  # 需要替换为实际字体路径
+            draw.text((10, 10), title, font=font, fill=(0, 0, 0))
+
+            img.save(file_path, "JPEG", quality=100)
+            os.remove("temp_screenshot.jpg")
+
+        PyQt5.QtWidgets.QMessageBox.information(self, "导出成功", f"表格已成功导出到: {file_path}")
 
 
 if __name__ == "__main__":
