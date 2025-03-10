@@ -360,7 +360,8 @@ class PanelPreDebugTool(QMainWindow):
 
     def preview_data(self):
         if self.order_info is not None:
-            preview_df = self.order_info.head()
+            # 直接使用完整的数据
+            preview_df = self.order_info
 
             rows, columns = preview_df.shape
             self.tableWidget.setRowCount(rows)
@@ -447,11 +448,14 @@ class PanelPreDebugTool(QMainWindow):
             # 读取保存 MAC 地址列表的文件
             with open(MAC_LIST, 'r') as file:
                 mac_list = [line.strip() for line in file.readlines()]
-            print("读取到的 MAC 地址列表:", mac_list)
+            # 处理 MAC 地址列表，只保留后 4 位
+            mac_list = [mac[-4:] for mac in mac_list]
+            print("读取到的 MAC 地址后4位列表:", mac_list)
         except FileNotFoundError:
             print(f"未找到保存 MAC 地址列表的文件 {MAC_LIST}")
         # 固定的负载名称列表
         fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带", "床头灯", "明亮模式", "窗帘开", "吊灯", "睡眠模式", "排气扇", "窗帘关", "玄关灯"]
+
         # 找出所有出现的负载
         all_loads = set()
         # 定义匹配中文的正则表达式
@@ -490,9 +494,13 @@ class PanelPreDebugTool(QMainWindow):
                     all_loads.add(load)
         all_loads = sorted(all_loads)
 
+        # 过滤掉包含“模式”的负载列
+        filtered_loads = [load for load in all_loads if "模式" not in load]
+
         # 设置列数和表头
-        self.table_widget.setColumnCount(4 + len(all_loads))
-        headers = ["设备信息", "产品型号", "设备MAC地址", "负载"] + all_loads
+        self.table_widget.setColumnCount(4 + len(filtered_loads))
+        # 修改表头中的 “设备MAC地址” 为 “设备MAC地址后4位”
+        headers = ["设备信息", "产品型号", "设备后4位", "负载"] + filtered_loads
         self.table_widget.setHorizontalHeaderLabels(headers)
 
         total_rows = 0
@@ -515,12 +523,12 @@ class PanelPreDebugTool(QMainWindow):
         insert_row_index = 1
         self.table_widget.insertRow(insert_row_index)
 
-        # 清空插入行对应 "设备信息", "产品型号", "设备MAC地址", "负载" 列
+        # 清空插入行对应 "设备信息", "产品型号", "设备MAC地址后4位", "负载" 列
         for col in range(4):
             self.table_widget.setItem(insert_row_index, col, QTableWidgetItem(""))
 
         # 在插入行添加 L1、L2、L3、L4 下拉选项
-        for col in range(4, 4 + len(all_loads)):
+        for col in range(4, 4 + len(filtered_loads)):
             combo_box = QComboBox()
             combo_box.addItems(["L1", "L2", "L3", "L4"])
             self.table_widget.setCellWidget(insert_row_index, col, combo_box)
@@ -546,9 +554,9 @@ class PanelPreDebugTool(QMainWindow):
                         self.table_widget.setCellWidget(current_row, 2, combo_box)
                     else:
                         # MAC 地址为空时显示提示信息
-                        self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址"))
+                        self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址后4位"))
                     self.table_widget.setItem(current_row, 3, QTableWidgetItem(load))
-                    for col, load_col in enumerate(all_loads, start=4):
+                    for col, load_col in enumerate(filtered_loads, start=4):
                         item = QTableWidgetItem()
                         if load_col == load:
                             item.setText("√")
@@ -566,9 +574,9 @@ class PanelPreDebugTool(QMainWindow):
                     self.table_widget.setCellWidget(current_row, 2, combo_box)
                 else:
                     # MAC 地址为空时显示提示信息
-                    self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址"))
+                    self.table_widget.setItem(current_row, 2, QTableWidgetItem("无可用 MAC 地址后4位"))
                 self.table_widget.setItem(current_row, 3, QTableWidgetItem(""))
-                for col in range(4, 4 + len(all_loads)):
+                for col in range(4, 4 + len(filtered_loads)):
                     item = QTableWidgetItem()
                     self.table_widget.setItem(current_row, col, item)
                 group.append(current_row)
@@ -580,7 +588,7 @@ class PanelPreDebugTool(QMainWindow):
             if len(group) > 1:
                 first_row = min(group)
                 span = len(group)
-                for col in range(3):  # 合并设备信息、产品型号、设备MAC地址列
+                for col in range(3):  # 合并设备信息、产品型号、设备MAC地址后4位列
                     self.table_widget.setSpan(first_row, col, span, 1)
                     for row in group[1:]:
                         if col < 2:
@@ -591,7 +599,7 @@ class PanelPreDebugTool(QMainWindow):
                                 cell_widget.hide()
 
         # 设置各列宽度
-        column_widths = [100, 80, 120, 80] + [50] * len(all_loads)
+        column_widths = [100, 80, 80, 80] + [50] * len(filtered_loads)
         for col, width in enumerate(column_widths):
             self.table_widget.setColumnWidth(col, width)
 
