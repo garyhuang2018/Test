@@ -10,7 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 from playsound import playsound
 import sounddevice as sd
 import soundfile as sf
-from PyQt5.QtCore import QThread, pyqtSignal  # 新增：导入 QThread 和 pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal
 
 
 class RedLightDetector(QMainWindow):
@@ -32,29 +32,39 @@ class RedLightDetector(QMainWindow):
         self.font = ImageFont.truetype(r"C:\Windows\Fonts\simsun.ttc", 20)
         self.detection_timer = QTimer(self)
         self.detection_timer.timeout.connect(self.check_brightness)
-        self.selected_point_index = None  # 新增：用于跟踪当前选中的测试点
+        self.selected_point_index = None  # 用于跟踪当前选中的测试点
+
+        # 白灯检测相关变量
+        self.white_detection_active = False
+        self.green_box = None  # 存储绿框坐标 (x1, y1, x2, y2)
+        self.white_light_timer = QTimer(self)
+        self.white_light_timer.timeout.connect(self.check_white_light)
+        self.last_brightness = None  # 存储前一帧亮度
+
+        # 新增键盘事件监听
+        self.setFocusPolicy(Qt.StrongFocus)
 
     def initUI(self):
-        self.setWindowTitle('红灯检测器')
-        self.setGeometry(100, 100, 1200, 600)  # Adjusted width to accommodate new panels
+        self.setWindowTitle('酒店一页纸模板测试')
+        self.setGeometry(100, 100, 1000, 600)  # 调整窗口宽度以容纳新面板
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        layout = QHBoxLayout()  # Main horizontal layout
+        layout = QHBoxLayout()  # 主水平布局
         central_widget.setLayout(layout)
 
-        # 新增：左侧导航面板
+        # 左侧导航面板
         nav_panel = QVBoxLayout()
         layout.addLayout(nav_panel)
 
         nav_label = QLabel("导航")
         nav_panel.addWidget(nav_label)
 
-        nav_button1 = QPushButton("按钮1")
+        nav_button1 = QPushButton("自动语音播报测试")
         nav_panel.addWidget(nav_button1)
 
-        # 新增：音频文件列表
+        # 音频文件列表
         self.audio_list = QListWidget()
         self.audio_list.addItem("小度小度打开射灯.mp3")  # 默认音频文件
         self.audio_list.itemClicked.connect(self.play_audio)
@@ -94,71 +104,152 @@ class RedLightDetector(QMainWindow):
         self.light_list = QListWidget()
         content_layout.addWidget(self.light_list)
 
-        # 新增：修改测试点按钮
+        # 修改测试点按钮
         self.edit_button = QPushButton("修改测试点")
         self.edit_button.clicked.connect(self.edit_test_point)
         button_layout.addWidget(self.edit_button)
 
-        # 新增：右侧面板
+        # 右侧面板
         right_panel = QVBoxLayout()
         layout.addLayout(right_panel)
 
-        # 新增：捕获图像显示标签
+        # 捕获图像显示标签
         self.captured_image_label = QLabel()
         right_panel.addWidget(self.captured_image_label)
 
+        # 白灯检测按钮
+        self.detect_white_button = QPushButton("开始检测白灯")
+        self.detect_white_button.setCheckable(True)
+        self.detect_white_button.clicked.connect(self.toggle_white_detection)
+        button_layout.addWidget(self.detect_white_button)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Return:
+            if self.detect_white_button.isChecked():
+                self.start_white_detection()
+
+    def start_white_detection(self):
+        if self.green_box:
+            self.status_label.setText("状态：开始检测白灯")
+            self.white_light_timer.start(100)
+            self.detect_white_button.setText("开始检测白灯")
+            self.detect_white_button.setChecked(False)
+        else:
+            self.status_label.setText("状态：请先绘制绿框")
+
     def play_audio(self):
         audio_file_path = "小度小度打开射灯.mp3"
-        self.audio_thread = AudioThread(audio_file_path)  # 新增：实例化音频线程
-        self.audio_thread.finished.connect(self.audio_thread.on_audio_finished)  # 新增：连接信号
-        self.audio_thread.start()  # 新增：启动线程
-
+        self.audio_thread = AudioThread(audio_file_path)
+        self.audio_thread.finished.connect(self.audio_thread.on_audio_finished)
+        self.audio_thread.start()
 
     def mousePressEvent(self, event):
-        if self.detecting:
+        if self.detecting or (self.white_detection_active and self.detect_white_button.isChecked()):
             return
 
-        x = event.pos().x() - self.video_label.x()
-        y = event.pos().y() - self.video_label.y()
+        try:
+            x = event.pos().x() - self.video_label.x()
+            y = event.pos().y() - self.video_label.y()
 
-        if event.button() == Qt.LeftButton:
-            if self.selected_point_index is not None:
-                # 修改选中的测试点
-                self.light_points[self.selected_point_index] = (x, y)
-                name = self.light_names[self.selected_point_index]
-                self.light_list.item(self.selected_point_index).setText(f"{name}: ({x}, {y})")
-                self.status_label.setText(f"状态：已修改测试点 {name} 的位置")
-                self.selected_point_index = None
-                self.edit_button.setText("修改测试点")
-            elif len(self.light_points) < self.max_points:
-                # 添加新的测试点
-                name, ok = QInputDialog.getText(self, "输入红灯名称", "请为该红灯命名：")
-                if ok and name:
-                    self.light_points.append((x, y))
-                    self.light_names.append(name)
-                    self.light_list.addItem(f"{name}: ({x}, {y})")
-                    self.status_label.setText(f"状态：已选择 {len(self.light_points)} 个红灯点")
-                    print(f"选择了红灯点：({x}, {y})，名称：{name}")
-            else:
-                self.status_label.setText("已达到最大红灯点数量")
-        elif event.button() == Qt.RightButton:
-            # 选择最近的测试点
-            if self.light_points:
-                distances = [((x-px)**2 + (y-py)**2)**0.5 for px, py in self.light_points]
-                nearest_index = distances.index(min(distances))
-                self.selected_point_index = nearest_index
-                self.status_label.setText(f"状态：已选中测试点 {self.light_names[nearest_index]}")
-                self.edit_button.setText("取消修改")
+            if event.button() == Qt.LeftButton:
+                if self.detect_white_button.isChecked():
+                    # 初始化起始点和结束点
+                    self.white_detection_active = True
+                    self.green_box_start = (x, y)
+                    self.green_box_end = (x, y)
+                    self.status_label.setText("状态：正在绘制绿框，请拖动鼠标")
+                elif self.selected_point_index is not None:
+                    # 修改选中的测试点
+                    self.light_points[self.selected_point_index] = (x, y)
+                    name = self.light_names[self.selected_point_index]
+                    self.light_list.item(self.selected_point_index).setText(f"{name}: ({x}, {y})")
+                    self.status_label.setText(f"状态：已修改测试点 {name} 的位置")
+                    self.selected_point_index = None
+                    self.edit_button.setText("修改测试点")
+                elif len(self.light_points) < self.max_points:
+                    # 添加新的测试点
+                    name, ok = QInputDialog.getText(self, "输入红灯名称", "请为该红灯命名：")
+                    if ok and name:
+                        self.light_points.append((x, y))
+                        self.light_names.append(name)
+                        self.light_list.addItem(f"{name}: ({x}, {y})")
+                        self.status_label.setText(f"状态：已选择 {len(self.light_points)} 个红灯点")
+                        print(f"选择了红灯点：({x}, {y})，名称：{name}")
+                else:
+                    self.status_label.setText("已达到最大红灯点数量")
+            elif event.button() == Qt.RightButton:
+                # 选择最近的测试点
+                if self.light_points:
+                    distances = [((x - px) ** 2 + (y - py) ** 2) ** 0.5 for px, py in self.light_points]
+                    nearest_index = distances.index(min(distances))
+                    self.selected_point_index = nearest_index
+                    self.status_label.setText(f"状态：已选中测试点 {self.light_names[nearest_index]}")
+                    self.edit_button.setText("取消修改")
+        except Exception as e:
+            print(f"鼠标按下事件处理错误：{str(e)}")
+
+    def mouseMoveEvent(self, event):
+        try:
+            if self.white_detection_active and self.detect_white_button.isChecked():
+                x = event.pos().x() - self.video_label.x()
+                y = event.pos().y() - self.video_label.y()
+                self.green_box_end = (x, y)
+                self.update()
+        except Exception as e:
+            print(f"鼠标移动事件处理错误：{str(e)}")
+
+    def mouseReleaseEvent(self, event):
+        try:
+            if self.white_detection_active and self.detect_white_button.isChecked():
+                x1, y1 = self.green_box_start
+                x2, y2 = self.green_box_end
+
+                # 确保坐标在视频标签范围内
+                video_rect = self.video_label.rect()
+                x1 = max(0, min(x1, video_rect.width()))
+                y1 = max(0, min(y1, video_rect.height()))
+                x2 = max(0, min(x2, video_rect.width()))
+                y2 = max(0, min(y2, video_rect.height()))
+
+                # 调整坐标顺序
+                x1, x2 = sorted([x1, x2])
+                y1, y2 = sorted([y1, y2])
+
+                # 确保框的大小有效
+                if x2 - x1 > 10 and y2 - y1 > 10:
+                    self.green_box = (x1, y1, x2, y2)
+                    self.white_detection_active = False
+                    self.status_label.setText("状态：按Enter键开始检测白灯")
+                else:
+                    self.status_label.setText("状态：绿框太小，请重新绘制")
+                    self.white_detection_active = False
+        except Exception as e:
+            print(f"鼠标释放事件处理错误：{str(e)}")
+
+    def toggle_white_detection(self):
+        if self.detect_white_button.isChecked():
+            self.status_label.setText("状态：请在视频中绘制绿框区域")
+        else:
+            self.status_label.setText("状态：白灯检测已停止")
+            self.white_light_timer.stop()
+            self.green_box = None
 
     def update_frame(self):
         try:
             ret, frame = self.cap.read()
             if ret:
+                # 绘制红灯点
                 for point, name in zip(self.light_points, self.light_names):
                     x, y = point
-                    cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
-                    frame = self.put_chinese_text(frame, name, (x - 20, y - 20), (0, 255, 0))
-
+                    if 0 <= x < frame.shape[1] and 0 <= y < frame.shape[0]:
+                        cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+                        frame = self.put_chinese_text(frame, name, (x - 20, y - 20), (0, 255, 0))
+                # 绘制绿框
+                if self.green_box:
+                    x1, y1, x2, y2 = self.green_box
+                    if 0 <= x1 < frame.shape[1] and 0 <= y1 < frame.shape[0] and \
+                            0 <= x2 < frame.shape[1] and 0 <= y2 < frame.shape[0]:
+                        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 self.display_image(frame)
         except Exception as e:
             print(f"更新帧时出错：{str(e)}")
@@ -199,15 +290,70 @@ class RedLightDetector(QMainWindow):
                 self.light_list.item(i).setText(f"{name}: ({x}, {y}) - 亮起")
 
                 # 捕获图像并添加时间戳
-                timestamp = cv2.putText(frame.copy(), 
-                                        f"Time: {cv2.getTickCount()}", 
-                                        (10, frame.shape[0] - 10), 
-                                        cv2.FONT_HERSHEY_SIMPLEX, 
-                                        0.5, 
-                                        (255, 255, 255), 
-                                        1, 
+                timestamp = cv2.putText(frame.copy(),
+                                        f"Time: {cv2.getTickCount()}",
+                                        (10, frame.shape[0] - 10),
+                                        cv2.FONT_HERSHEY_SIMPLEX,
+                                        0.5,
+                                        (255, 255, 255),
+                                        1,
                                         cv2.LINE_AA)
                 self.display_captured_image(timestamp)
+
+    def check_white_light(self):
+        if not self.green_box:
+            return
+
+        ret, frame = self.cap.read()
+        if not ret:
+            return
+
+        x1, y1, x2, y2 = self.green_box
+        if x1 >= x2 or y1 >= y2:
+            return
+
+        # 确保坐标在有效范围内
+        x1 = max(0, min(x1, frame.shape[1]))
+        y1 = max(0, min(y1, frame.shape[0]))
+        x2 = max(0, min(x2, frame.shape[1]))
+        y2 = max(0, min(y2, frame.shape[0]))
+
+        roi = frame[y1:y2, x1:x2]
+        if roi.size == 0:
+            return
+
+        # 转换为灰度图
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+        current_brightness = np.mean(gray)
+
+        if self.last_brightness is not None:
+            brightness_diff = abs(current_brightness - self.last_brightness)
+            print(brightness_diff)
+            if brightness_diff > 1:  # 降低检测阈值
+                self.status_label.setText("状态：检测到白灯闪烁")
+                self.capture_and_mark(frame, (x1, y1, x2, y2))
+                self.last_brightness = None
+                self.white_light_timer.stop()
+                self.detect_white_button.setText("重新检测")
+        else:
+            self.last_brightness = current_brightness
+
+    def capture_and_mark(self, frame, box):
+        # 复制当前帧
+        captured = frame.copy()
+        x1, y1, x2, y2 = box
+        # 绘制红框
+        cv2.rectangle(captured, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        # 添加时间戳
+        timestamp = cv2.getTickCount()
+        cv2.putText(captured, f"Time: {timestamp}", (10, captured.shape[0] - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+        # 保存截图
+        filename = f"white_light_{timestamp}.jpg"
+        cv2.imwrite(filename, captured)
+        print(f"已保存截图：{filename}")
+        # 显示在右侧面板
+        self.display_captured_image(captured)
 
     def put_chinese_text(self, img, text, position, color):
         img_pil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
