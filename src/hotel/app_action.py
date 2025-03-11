@@ -213,6 +213,29 @@ class App:
     def locate_devices(self):
         self.click_element_if_texts_exists('定位')
 
+    def locate_device_according_to_device_name(self, index):
+        # 根据文本找到目标元素
+        target_text = "定位"
+        target_element = d.device(text=target_text)
+        text_list = []
+        if target_element.exists:
+            # 获取目标元素的 xpath
+            target_xpath = f'//*[@text="{target_text}"]'
+            # 通过 xpath 找到目标元素的父元素
+            parent_xpath = f'{target_xpath}/..'
+            # 直接使用完整 xpath 查找父元素下的其他文本元素
+            other_text_elements_xpath = f'{parent_xpath}//*[@text!=""]'
+            other_text_elements = d.device.xpath(other_text_elements_xpath).all()
+
+            # 遍历并筛选出包含“超级设备”文本的元素并输出
+            for element in other_text_elements:
+                # 过滤掉目标元素本身，并检查元素文本是否包含“超级设备”
+                if element.text != target_text and "超级设备" in element.text:
+                    text_list.append(element.text)
+            print(text_list[index])
+        else:
+            print("未找到目标文本元素")
+
     def swipe_up(self):
         # 滑动操作示例
         # swipe(x1, y1, x2, y2, steps)
@@ -466,9 +489,13 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
+    d.locate_device_according_to_device_name(1)
+    # d.start_app()
     # d.swipe_and_click_text("好")
     # d.apply_template("好", "GP系列")
-    d.add_and_replace_devices("GP系列", "6场景2继电器")
+    # d.add_and_replace_devices("GP系列", "4场景1窗帘")
+    # d.click_element_if_texts_exists("添加")
+    # d.click_element_if_texts_exists("完成")
     try:
         # 获取屏幕尺寸
         width, height = d.device.window_size()
