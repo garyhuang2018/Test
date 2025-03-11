@@ -38,10 +38,11 @@ class RedLightDetector(QMainWindow):
 
         # 白灯检测相关变量
         self.white_detection_active = False
-        self.green_box = None  # 存储绿框坐标 (x1, y1, x2, y2)
+        self.green_boxes = []  # 存储多个绿框坐标
+        self.max_green_boxes = 10  # 最大绿框数量，修改为你想要的值
         self.white_light_timer = QTimer(self)
         self.white_light_timer.timeout.connect(self.check_white_light)
-        self.last_brightness = None  # 存储前一帧亮度
+        self.last_brightnesses = [None] * self.max_green_boxes  # 存储每个绿框前一帧亮度
 
         # 新增键盘事件监听
         self.setFocusPolicy(Qt.StrongFocus)
@@ -131,7 +132,7 @@ class RedLightDetector(QMainWindow):
                 self.start_white_detection()
 
     def start_white_detection(self):
-        if self.green_box:
+        if self.green_boxes:
             self.status_label.setText("状态：开始检测白灯")
             self.white_light_timer.start(100)
             self.detect_white_button.setText("开始检测白灯")
@@ -154,7 +155,7 @@ class RedLightDetector(QMainWindow):
             y = event.pos().y() - self.video_label.y()
 
             if event.button() == Qt.LeftButton:
-                if self.detect_white_button.isChecked():
+                if self.detect_white_button.isChecked() and len(self.green_boxes) < self.max_green_boxes:
                     # 初始化起始点和结束点
                     self.white_detection_active = True
                     self.green_box_start = (x, y)
@@ -219,9 +220,12 @@ class RedLightDetector(QMainWindow):
 
                 # 确保框的大小有效
                 if x2 - x1 > 10 and y2 - y1 > 10:
-                    self.green_box = (x1, y1, x2, y2)
+                    self.green_boxes.append((x1, y1, x2, y2))
                     self.white_detection_active = False
-                    self.status_label.setText("状态：按Enter键开始检测白灯")
+                    if len(self.green_boxes) < self.max_green_boxes:
+                        self.status_label.setText("状态：可继续绘制绿框，按Enter键开始检测白灯")
+                    else:
+                        self.status_label.setText("状态：已达到最大绿框数量，按Enter键开始检测白灯")
                 else:
                     self.status_label.setText("状态：绿框太小，请重新绘制")
                     self.white_detection_active = False
@@ -230,11 +234,15 @@ class RedLightDetector(QMainWindow):
 
     def toggle_white_detection(self):
         if self.detect_white_button.isChecked():
-            self.status_label.setText("状态：请在视频中绘制绿框区域")
+            if len(self.green_boxes) < self.max_green_boxes:
+                self.status_label.setText("状态：请在视频中绘制绿框区域")
+            else:
+                self.status_label.setText("状态：已达到最大绿框数量，按Enter键开始检测白灯")
         else:
             self.status_label.setText("状态：白灯检测已停止")
             self.white_light_timer.stop()
-            self.green_box = None
+            self.green_boxes = []
+            self.last_brightnesses = [None] * self.max_green_boxes
 
     def update_frame(self):
         try:
@@ -247,8 +255,8 @@ class RedLightDetector(QMainWindow):
                         cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
                         frame = self.put_chinese_text(frame, name, (x - 20, y - 20), (0, 255, 0))
                 # 绘制绿框
-                if self.green_box:
-                    x1, y1, x2, y2 = self.green_box
+                for green_box in self.green_boxes:
+                    x1, y1, x2, y2 = green_box
                     if 0 <= x1 < frame.shape[1] and 0 <= y1 < frame.shape[0] and \
                             0 <= x2 < frame.shape[1] and 0 <= y2 < frame.shape[0]:
                         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
@@ -303,42 +311,41 @@ class RedLightDetector(QMainWindow):
                 self.display_captured_image(timestamp)
 
     def check_white_light(self):
-        if not self.green_box:
+        if not self.green_boxes:
             return
 
         ret, frame = self.cap.read()
         if not ret:
             return
 
-        x1, y1, x2, y2 = self.green_box
-        if x1 >= x2 or y1 >= y2:
-            return
+        for i, green_box in enumerate(self.green_boxes):
+            x1, y1, x2, y2 = green_box
+            if x1 >= x2 or y1 >= y2:
+                continue
 
-        # 确保坐标在有效范围内
-        x1 = max(0, min(x1, frame.shape[1]))
-        y1 = max(0, min(y1, frame.shape[0]))
-        x2 = max(0, min(x2, frame.shape[1]))
-        y2 = max(0, min(y2, frame.shape[0]))
+            # 确保坐标在有效范围内
+            x1 = max(0, min(x1, frame.shape[1]))
+            y1 = max(0, min(y1, frame.shape[0]))
+            x2 = max(0, min(x2, frame.shape[1]))
+            y2 = max(0, min(y2, frame.shape[0]))
 
-        roi = frame[y1:y2, x1:x2]
-        if roi.size == 0:
-            return
+            roi = frame[y1:y2, x1:x2]
+            if roi.size == 0:
+                continue
 
-        # 转换为灰度图
-        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        current_brightness = np.mean(gray)
+            # 转换为灰度图
+            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+            current_brightness = np.mean(gray)
 
-        if self.last_brightness is not None:
-            brightness_diff = abs(current_brightness - self.last_brightness)
-            print(brightness_diff)
-            if brightness_diff > 1:  # 降低检测阈值
-                self.status_label.setText("状态：检测到白灯闪烁")
-                self.capture_and_mark(frame, (x1, y1, x2, y2))
-                self.last_brightness = None
-                self.white_light_timer.stop()
-                self.detect_white_button.setText("重新检测")
-        else:
-            self.last_brightness = current_brightness
+            if self.last_brightnesses[i] is not None:
+                brightness_diff = abs(current_brightness - self.last_brightnesses[i])
+                print(brightness_diff)
+                if brightness_diff > 1:  # 降低检测阈值
+                    self.status_label.setText("状态：检测到白灯闪烁")
+                    self.capture_and_mark(frame, (x1, y1, x2, y2))
+                    self.last_brightnesses[i] = None
+            else:
+                self.last_brightnesses[i] = current_brightness
 
     def capture_and_mark(self, frame, box):
         # 复制当前帧
