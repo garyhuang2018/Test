@@ -5,7 +5,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, \
-    QFileDialog, QListWidget, QHBoxLayout
+    QFileDialog, QListWidget, QHBoxLayout, QSlider
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont
 from PIL import Image, ImageDraw, ImageFont
@@ -46,6 +46,7 @@ class RedLightDetector(QMainWindow):
 
         # 新增键盘事件监听
         self.setFocusPolicy(Qt.StrongFocus)
+        self.threshold = 1  # 初始化阈值为1
 
     def initUI(self):
         self.setWindowTitle('酒店一页纸模板测试')
@@ -126,10 +127,32 @@ class RedLightDetector(QMainWindow):
         self.detect_white_button.clicked.connect(self.toggle_white_detection)
         button_layout.addWidget(self.detect_white_button)
 
+
+        # 阈值调节滑动条
+        self.threshold_label = QLabel("白灯检测阈值: 1")
+        content_layout.addWidget(self.threshold_label)
+
+        self.threshold_slider = QSlider(Qt.Horizontal)
+        self.threshold_slider.setRange(1, 10)
+        self.threshold_slider.setValue(1)
+        self.threshold_slider.valueChanged.connect(self.update_threshold)
+        content_layout.addWidget(self.threshold_slider)
+
+    def update_threshold(self, value):
+        self.threshold = value
+        self.threshold_label.setText(f"白灯检测阈值: {value}")
+
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Return:
-            if self.detect_white_button.isChecked():
-                self.start_white_detection()
+        try:
+            if event.key() == Qt.Key_Return:
+                if self.detect_white_button.isChecked():
+                    self.start_white_detection()
+                elif "按Enter重新检测" in self.status_label.text():
+                    self.status_label.setText("状态：开始检测白灯")
+                    self.white_light_timer.start(100)
+                    self.detect_white_button.setText("开始检测白灯")
+        except Exception as e:
+            print(f"按键事件处理出错：{str(e)}")
 
     def start_white_detection(self):
         if self.green_boxes:
@@ -340,10 +363,12 @@ class RedLightDetector(QMainWindow):
             if self.last_brightnesses[i] is not None:
                 brightness_diff = abs(current_brightness - self.last_brightnesses[i])
                 print(brightness_diff)
-                if brightness_diff > 1:  # 降低检测阈值
-                    self.status_label.setText("状态：检测到白灯闪烁")
+                if brightness_diff > self.threshold:  # 使用用户调节的阈值
+                    self.status_label.setText("状态：检测到白灯闪烁，按Enter重新检测")
                     self.capture_and_mark(frame, (x1, y1, x2, y2))
                     self.last_brightnesses[i] = None
+                    self.white_light_timer.stop()  # 暂停检测
+                    self.detect_white_button.setText("重新检测")
             else:
                 self.last_brightnesses[i] = current_brightness
 
