@@ -1,5 +1,7 @@
 import json
 import sys
+from datetime import datetime
+
 import cv2
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, \
@@ -345,11 +347,11 @@ class RedLightDetector(QMainWindow):
         # 绘制红框
         cv2.rectangle(captured, (x1, y1), (x2, y2), (0, 0, 255), 2)
         # 添加时间戳
-        timestamp = cv2.getTickCount()
-        cv2.putText(captured, f"Time: {timestamp}", (10, captured.shape[0] - 10),
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cv2.putText(captured, f"Time: {current_time}", (10, captured.shape[0] - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
         # 保存截图
-        filename = f"white_light_{timestamp}.jpg"
+        filename = f"white_light_{current_time.replace(':', '-')}.jpg"
         cv2.imwrite(filename, captured)
         print(f"已保存截图：{filename}")
         # 显示在右侧面板
