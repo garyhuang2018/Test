@@ -1,3 +1,4 @@
+import functools
 import json
 import os
 import re
@@ -292,6 +293,7 @@ class SerialPortTab(QWidget):
 class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
+        self.group_start_map = {}
         ui_file_path = os.path.join(os.path.dirname(__file__), 'panel.ui')
         uic.loadUi(ui_file_path, self)
         self.sidebar_list.itemClicked.connect(self.show_page)
@@ -558,7 +560,8 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
             self.table_widget.setCellWidget(insert_row_index, col, combo_box)
 
         current_row = insert_row_index + 1
-        row_groups = []  # 用于记录每行负载所属的原始行分组
+        group_id = 0
+        row_groups = []  # 用于记录每行负载所属的组ID
         for device in selected_devices:
             device_info = device[device_info_column_index]
             product_model = device[product_model_index]
@@ -570,11 +573,16 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
                 chinese_load = ''.join(chinese_pattern.findall(load))
                 if chinese_load and chinese_load in load_str:
                     self.table_widget.setItem(current_row, 0, PyQt5.QtWidgets.QTableWidgetItem(device_info))
-                    self.table_widget.setItem(current_row, 1, PyQt5.QtWidgets.QTableWidgetItem(product_model))
+                    item = PyQt5.QtWidgets.QTableWidgetItem(product_model)
+                    item.setTextAlignment(Qt.AlignVCenter | Qt.TextWordWrap)
+                    self.table_widget.setItem(current_row, 1, item)
                     if mac_list:
                         # 创建下拉列表
                         combo_box = QComboBox()
                         combo_box.addItems(mac_list)
+                        combo_box.setProperty("group_id", group_id)
+                        combo_box.currentIndexChanged.connect(
+                            functools.partial(self.on_mac_selection_changed, combo_box))
                         self.table_widget.setCellWidget(current_row, 2, combo_box)
                     else:
                         # MAC 地址为空时显示提示信息
@@ -586,15 +594,20 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
                             item.setText("√")
                         self.table_widget.setItem(current_row, col, item)
                     group.append(current_row)
+                    row_groups.append(group_id)
                     current_row += 1
                     has_load = True
             if not has_load:
                 self.table_widget.setItem(current_row, 0, PyQt5.QtWidgets.QTableWidgetItem(device_info))
-                self.table_widget.setItem(current_row, 1, PyQt5.QtWidgets.QTableWidgetItem(product_model))
+                item = PyQt5.QtWidgets.QTableWidgetItem(product_model)
+                item.setTextAlignment(Qt.AlignVCenter | Qt.TextWordWrap)
+                self.table_widget.setItem(current_row, 1, item)
                 if mac_list:
                     # 创建下拉列表
                     combo_box = QComboBox()
                     combo_box.addItems(mac_list)
+                    combo_box.setProperty("group_id", group_id)
+                    combo_box.currentIndexChanged.connect(functools.partial(self.on_mac_selection_changed, combo_box))
                     self.table_widget.setCellWidget(current_row, 2, combo_box)
                 else:
                     # MAC 地址为空时显示提示信息
@@ -604,31 +617,62 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
                     item = PyQt5.QtWidgets.QTableWidgetItem()
                     self.table_widget.setItem(current_row, col, item)
                 group.append(current_row)
+                row_groups.append(group_id)
                 current_row += 1
-            row_groups.append(group)
+            group_id += 1
 
-        # 合并同一原始行的单元格
-        for group in row_groups:
-            if len(group) > 1:
-                first_row = min(group)
-                span = len(group)
-                for col in range(3):  # 合并设备信息、产品型号、设备MAC地址后4位列
+        # 合并同一原始行的设备信息和产品型号单元格
+        for current_group_id in set(row_groups):
+            group_rows = [i for i, gid in enumerate(row_groups) if gid == current_group_id]
+            if len(group_rows) > 1:
+                first_row = group_rows[0] + insert_row_index + 1
+                span = len(group_rows)
+                for col in range(2):  # 合并设备信息、产品型号列
                     self.table_widget.setSpan(first_row, col, span, 1)
-                    for row in group[1:]:
+                    for row in group_rows[1:]:
                         if col < 2:
-                            self.table_widget.item(row, col).setFlags(Qt.NoItemFlags)
-                        else:
-                            cell_widget = self.table_widget.cellWidget(row, col)
-                            if cell_widget:
-                                cell_widget.hide()
+                            self.table_widget.item(row + insert_row_index + 1, col).setFlags(Qt.NoItemFlags)
 
         # 设置各列宽度
-        column_widths = [100, 80, 80, 80] + [50] * len(filtered_loads)
+        column_widths = [100, 150, 80, 80] + [50] * len(filtered_loads)
         for col, width in enumerate(column_widths):
             self.table_widget.setColumnWidth(col, width)
 
+        # 自动调整行高以适应内容
+        self.table_widget.resizeRowsToContents()
+
         # 连接单元格点击信号到槽函数
         self.table_widget.cellClicked.connect(self.on_cell_clicked)
+
+    # on_mac_selection_changed 方法的实现
+    def on_mac_selection_changed(self, combo_box):
+        # 获取当前触发信号的 combo_box 的 group_id
+        current_group_id = combo_box.property("group_id")
+        print(current_group_id,'group id')
+        selected_mac = combo_box.currentText()
+
+        reply = PyQt5.QtWidgets.QMessageBox.question(
+            self, '确认选择',
+            '你确定要选择这个 MAC 地址后 4 位吗？',
+            PyQt5.QtWidgets.QMessageBox.Yes | PyQt5.QtWidgets.QMessageBox.No,
+            PyQt5.QtWidgets.QMessageBox.No
+        )
+
+        if reply == PyQt5.QtWidgets.QMessageBox.Yes:
+            # 遍历表格中的每一行
+            for row in range(self.table_widget.rowCount()):
+                cell_widget = self.table_widget.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    # 获取当前单元格的 combo_box 的 group_id
+                    cell_group_id = cell_widget.property("group_id")
+                    if cell_group_id == current_group_id:
+                        # 创建一个新的 QTableWidgetItem 并设置其文本为所选的 MAC 地址
+                        item = PyQt5.QtWidgets.QTableWidgetItem(selected_mac)
+                        # 设置该单元格为不可编辑状态
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                        self.table_widget.setItem(row, 2, item)
+                        # 隐藏该下拉框
+                        cell_widget.hide()
 
     def on_cell_clicked(self, row, column):
         # 只处理负载列（从第4列开始）且排除下拉选项行
@@ -643,7 +687,6 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
                 else:
                     item.setText("")
 
-    # 添加导出表格方法
     def export_table(self):
         file_path, selected_filter = QFileDialog.getSaveFileName(
             self,
@@ -654,6 +697,15 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
 
         if not file_path:
             return
+
+        # 更新表格中下拉框的内容
+        rows = self.table_widget.rowCount()
+        for row in range(rows):
+            cell_widget = self.table_widget.cellWidget(row, 2)
+            if isinstance(cell_widget, QComboBox):
+                selected_mac = cell_widget.currentText()
+                item = PyQt5.QtWidgets.QTableWidgetItem(selected_mac)
+                self.table_widget.setItem(row, 2, item)
 
         # 创建整个表格的截图
         screen = QApplication.primaryScreen()
