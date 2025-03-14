@@ -1,9 +1,11 @@
 import json
 import sys
+import time
 from datetime import datetime
 
 import cv2
 import numpy as np
+from PyQt5 import QtCore
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, \
     QFileDialog, QListWidget, QHBoxLayout, QSlider
 from PyQt5.QtCore import Qt, QTimer
@@ -13,6 +15,35 @@ from playsound import playsound
 import sounddevice as sd
 import soundfile as sf
 from PyQt5.QtCore import QThread, pyqtSignal
+
+
+class StateMachine:
+    YELLOW = 0
+    TRANSITION = 1
+    WHITE = 2
+    FLASH = 3
+
+    def __init__(self):
+        self.state = self.YELLOW
+        self.transition_start = None
+        self.white_duration = 0
+
+    def update(self, yellow_ratio, white_ratio):
+        # 调整阈值
+        YELLOW_THRESHOLD = 0.05
+        WHITE_THRESHOLD = 0.1
+        if self.state == self.YELLOW:
+            if yellow_ratio < YELLOW_THRESHOLD and white_ratio > WHITE_THRESHOLD:
+                self.state = self.TRANSITION
+                self.transition_start = datetime.now()
+        elif self.state == self.TRANSITION:
+            if white_ratio > 0.5:
+                self.state = self.WHITE
+        elif self.state == self.WHITE:
+            self.white_duration = (datetime.now() - self.transition_start).total_seconds()
+            if self.white_duration > 1 and white_ratio < 0.3:
+                self.state = self.FLASH
+        return self.state
 
 
 class RedLightDetector(QMainWindow):
@@ -42,11 +73,22 @@ class RedLightDetector(QMainWindow):
         self.max_green_boxes = 10  # 最大绿框数量，修改为你想要的值
         self.white_light_timer = QTimer(self)
         self.white_light_timer.timeout.connect(self.check_white_light)
-        self.last_brightnesses = [None] * self.max_green_boxes  # 存储每个绿框前一帧亮度
+        # 新增：存储每个绿框前一帧黄色和白色的像素比例
+        self.last_yellow_ratio = [None] * self.max_green_boxes
+        self.last_white_ratio = [None] * self.max_green_boxes
+        # 新增：存储每个绿框前一帧黄色和白色的像素数量
+        self.last_yellow_pixels = [None] * self.max_green_boxes
+        self.last_white_pixels = [None] * self.max_green_boxes
+        # 新增：用于记录状态，0 表示黄灯，1 表示白灯
+        self.light_states = [0] * self.max_green_boxes
 
         # 新增键盘事件监听
         self.setFocusPolicy(Qt.StrongFocus)
         self.threshold = 1  # 初始化阈值为1
+        self.create_trackbars()
+        self.state_machines = []  # 新增状态机列表
+        # 新增：用于记录每个绿框从黄色变为白色的时间
+        self.transition_start_time = [0] * self.max_green_boxes
 
     def initUI(self):
         self.setWindowTitle('酒店一页纸模板测试')
@@ -127,7 +169,6 @@ class RedLightDetector(QMainWindow):
         self.detect_white_button.clicked.connect(self.toggle_white_detection)
         button_layout.addWidget(self.detect_white_button)
 
-
         # 阈值调节滑动条
         self.threshold_label = QLabel("白灯检测阈值: 1")
         content_layout.addWidget(self.threshold_label)
@@ -137,6 +178,25 @@ class RedLightDetector(QMainWindow):
         self.threshold_slider.setValue(1)
         self.threshold_slider.valueChanged.connect(self.update_threshold)
         content_layout.addWidget(self.threshold_slider)
+
+    def create_trackbars(self):
+        cv2.namedWindow('Color Thresholds')
+        cv2.createTrackbar('YHMin', 'Color Thresholds', 20, 180, self.on_trackbar)
+        cv2.createTrackbar('YHMax', 'Color Thresholds', 40, 180, self.on_trackbar)
+        cv2.createTrackbar('YSMin', 'Color Thresholds', 100, 255, self.on_trackbar)
+        cv2.createTrackbar('YSMax', 'Color Thresholds', 255, 255, self.on_trackbar)
+        cv2.createTrackbar('YVMin', 'Color Thresholds', 100, 255, self.on_trackbar)
+        cv2.createTrackbar('YVMax', 'Color Thresholds', 255, 255, self.on_trackbar)
+        cv2.createTrackbar('WHMin', 'Color Thresholds', 0, 180, self.on_trackbar)
+        cv2.createTrackbar('WHMax', 'Color Thresholds', 180, 180, self.on_trackbar)
+        cv2.createTrackbar('WSMin', 'Color Thresholds', 0, 255, self.on_trackbar)
+        cv2.createTrackbar('WSMax', 'Color Thresholds', 30, 255, self.on_trackbar)
+        cv2.createTrackbar('WVMin', 'Color Thresholds', 200, 255, self.on_trackbar)
+        cv2.createTrackbar('WVMax', 'Color Thresholds', 255, 255, self.on_trackbar)
+
+    def on_trackbar(self, value):
+        # 当滑动条值改变时，此函数会被调用，但这里暂时不需要额外操作
+        pass
 
     def update_threshold(self, value):
         self.threshold = value
@@ -333,6 +393,8 @@ class RedLightDetector(QMainWindow):
                                         cv2.LINE_AA)
                 self.display_captured_image(timestamp)
 
+    import time
+
     def check_white_light(self):
         if not self.green_boxes:
             return
@@ -341,11 +403,16 @@ class RedLightDetector(QMainWindow):
         if not ret:
             return
 
+        # 定义黄色和白色在 HSV 颜色空间中的范围，调整黄色色相下限以适应偏橙色的黄色
+        yellow_lower = np.array([10, 100, 100])
+        yellow_upper = np.array([40, 255, 255])
+        white_lower = np.array([0, 0, 200])
+        white_upper = np.array([180, 30, 255])
+
+        current_time = time.time()
+
         for i, green_box in enumerate(self.green_boxes):
             x1, y1, x2, y2 = green_box
-            if x1 >= x2 or y1 >= y2:
-                continue
-
             # 确保坐标在有效范围内
             x1 = max(0, min(x1, frame.shape[1]))
             y1 = max(0, min(y1, frame.shape[0]))
@@ -356,21 +423,55 @@ class RedLightDetector(QMainWindow):
             if roi.size == 0:
                 continue
 
-            # 转换为灰度图
-            gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-            current_brightness = np.mean(gray)
+            # 在转换到 HSV 颜色空间之前进行高斯模糊
+            roi = cv2.GaussianBlur(roi, (5, 5), 0)
+            hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-            if self.last_brightnesses[i] is not None:
-                brightness_diff = abs(current_brightness - self.last_brightnesses[i])
-                print(brightness_diff)
-                if brightness_diff > self.threshold:  # 使用用户调节的阈值
-                    self.status_label.setText("状态：检测到白灯闪烁，按Enter重新检测")
-                    self.capture_and_mark(frame, (x1, y1, x2, y2))
-                    self.last_brightnesses[i] = None
-                    self.white_light_timer.stop()  # 暂停检测
-                    self.detect_white_button.setText("重新检测")
-            else:
-                self.last_brightnesses[i] = current_brightness
+            # 分割黄色和白色区域
+            yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
+            white_mask = cv2.inRange(hsv, white_lower, white_upper)
+
+            # 计算黄色和白色的像素数量
+            yellow_pixels = cv2.countNonZero(yellow_mask)
+            white_pixels = cv2.countNonZero(white_mask)
+
+            # 打印调试信息
+            print(f"绿框 {i} - 当前黄色像素数量: {yellow_pixels}, 当前白色像素数量: {white_pixels}")
+            if self.last_yellow_pixels[i] is not None and self.last_white_pixels[i] is not None:
+                print(f"绿框 {i} - 前一帧黄色像素数量: {self.last_yellow_pixels[i]}, 前一帧白色像素数量: {self.last_white_pixels[i]}")
+
+            # 判断是否从黄色变为白色
+            if (self.last_yellow_pixels[i] is not None and
+                    self.last_white_pixels[i] is not None and
+                    yellow_pixels < self.last_yellow_pixels[i] and
+                    white_pixels > self.last_white_pixels[i] and
+                    self.light_states[i] == 0):
+                print(
+                    f"绿框 {i} - 检测到从黄色变为白色，黄色像素变化: {self.last_yellow_pixels[i] - yellow_pixels}, 白色像素变化: {white_pixels - self.last_white_pixels[i]}")
+                self.light_states[i] = 1
+                self.transition_start_time[i] = current_time
+
+            # 判断是否从白色变为黄色且在 1 秒内
+            elif (self.light_states[i] == 1 and
+                  yellow_pixels > self.last_yellow_pixels[i] and
+                  white_pixels < self.last_white_pixels[i] and
+                  current_time - self.transition_start_time[i] <= 0.5):
+                print(
+                    f"绿框 {i} - 检测到从白色变回黄色且在 1 秒内，黄色像素变化: {yellow_pixels - self.last_yellow_pixels[i]}, 白色像素变化: {self.last_white_pixels[i] - white_pixels}")
+                self.status_label.setText("状态：检测到灯光从黄色变为白色再变回黄色，按Enter重新检测")
+                self.capture_and_mark(frame, (x1, y1, x2, y2))
+                self.light_states[i] = 0
+
+            # 判断是否从白色变回白色（这里可以根据实际情况调整判断逻辑）
+            elif self.light_states[i] == 1:
+                if white_pixels > self.last_white_pixels[i]:
+                    print(f"绿框 {i} - 白灯持续或变亮，白色像素变化: {white_pixels - self.last_white_pixels[i]}")
+                elif white_pixels < self.last_white_pixels[i]:
+                    print(f"绿框 {i} - 白灯变暗，白色像素变化: {self.last_white_pixels[i] - white_pixels}")
+
+            # 更新前一帧的像素数量
+            self.last_yellow_pixels[i] = yellow_pixels
+            self.last_white_pixels[i] = white_pixels
 
     def capture_and_mark(self, frame, box):
         # 复制当前帧
@@ -470,6 +571,57 @@ class AudioThread(QThread):  # 新增：创建音频播放线程类
 
 
 if __name__ == '__main__':
+    # import cv2
+    # import numpy as np
+    #
+    # # 打开摄像头
+    # cap = cv2.VideoCapture(0)
+    #
+    # # 创建窗口和滑动条
+    # cv2.namedWindow('Trackbars')
+    # cv2.createTrackbar('Hue Min', 'Trackbars', 0, 180, lambda x: None)
+    # cv2.createTrackbar('Hue Max', 'Trackbars', 180, 180, lambda x: None)
+    # cv2.createTrackbar('Sat Min', 'Trackbars', 0, 255, lambda x: None)
+    # cv2.createTrackbar('Sat Max', 'Trackbars', 255, 255, lambda x: None)
+    # cv2.createTrackbar('Val Min', 'Trackbars', 0, 255, lambda x: None)
+    # cv2.createTrackbar('Val Max', 'Trackbars', 255, 255, lambda x: None)
+    #
+    # while True:
+    #     ret, frame = cap.read()
+    #     if not ret:
+    #         break
+    #
+    #     # 获取滑动条的值
+    #     h_min = cv2.getTrackbarPos('Hue Min', 'Trackbars')
+    #     h_max = cv2.getTrackbarPos('Hue Max', 'Trackbars')
+    #     s_min = cv2.getTrackbarPos('Sat Min', 'Trackbars')
+    #     s_max = cv2.getTrackbarPos('Sat Max', 'Trackbars')
+    #     v_min = cv2.getTrackbarPos('Val Min', 'Trackbars')
+    #     v_max = cv2.getTrackbarPos('Val Max', 'Trackbars')
+    #
+    #     # 定义 HSV 范围
+    #     lower_yellow = np.array([h_min, s_min, v_min])
+    #     upper_yellow = np.array([h_max, s_max, v_max])
+    #
+    #     # 转换到 HSV 颜色空间
+    #     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    #
+    #     # 创建掩码
+    #     mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    #
+    #     # 显示结果
+    #     result = cv2.bitwise_and(frame, frame, mask=mask)
+    #
+    #     cv2.imshow('Original', frame)
+    #     cv2.imshow('Mask', mask)
+    #     cv2.imshow('Result', result)
+    #
+    #     if cv2.waitKey(1) & 0xFF == ord('q'):
+    #         break
+    #
+    # # 释放摄像头并关闭窗口
+    # cap.release()
+    # cv2.destroyAllWindows()
     app = QApplication(sys.argv)
     ex = RedLightDetector()
     ex.show()
