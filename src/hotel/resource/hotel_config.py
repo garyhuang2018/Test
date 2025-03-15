@@ -5,13 +5,15 @@ import re
 
 import pandas as pd
 from PyQt5 import uic
+
 from PyQt5.QtCore import Qt
 import PyQt5.QtWidgets
 from api.server_request import fetch_hotel_list, fetch_hotel_rooms_no
 import sys
 import serial
 import serial.tools.list_ports
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, QFileDialog, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, QFileDialog, QLabel, QDialog, QMenu, QLineEdit
+
 from PyQt5.QtCore import QThread, pyqtSignal
 import datetime
 from openpyxl import Workbook
@@ -303,7 +305,66 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         self.init_config_interface()
         self.add_serial_port_tab()  # 添加串口Tab页面
         self.current_hotel = ""  # 新增属性保存酒店名称
-        self.current_room = ""  # 新增属性保存房间号
+        self.current_room = ""  #
+        # ...原有初始化代码...
+        self.table_widget.setContextMenuPolicy(Qt.CustomContextMenu)  # 添加右键菜单策略
+        self.table_widget.customContextMenuRequested.connect(self.show_context_menu)  # 连接右键菜单事件
+
+    def show_context_menu(self, pos):
+        """显示右键菜单"""
+        # 获取当前点击的行
+        row = self.table_widget.rowAt(pos.y())
+        if row == -1:
+            return
+
+        # 获取当前行的设备信息
+        device_info_item = self.table_widget.item(row, 0)
+        device_info = device_info_item.text() if device_info_item else ""
+
+        product_model_item = self.table_widget.item(row, 1)
+        product_model = product_model_item.text() if product_model_item else ""
+
+        mac_address_item = self.table_widget.item(row, 2)
+        mac_address = mac_address_item.text() if mac_address_item else ""
+
+        # 如果是下拉框，获取下拉框的内容
+        cell_widget = self.table_widget.cellWidget(row, 2)
+        if isinstance(cell_widget, QComboBox):
+            mac_address = cell_widget.currentText()
+        # 创建菜单
+        menu = QMenu(self)
+        config_action = menu.addAction("配置设备")
+        # delete_action = menu.addAction("删除设备")
+
+        # 执行菜单
+        action = menu.exec_(self.table_widget.mapToGlobal(pos))
+
+        if action == config_action:
+            self.config_device(row, device_info, product_model, mac_address)
+
+    def config_device(self, row, device_info, product_model, mac_address):
+        print('config device')
+        """配置设备的槽函数"""
+        # 弹出配置对话框示例
+        config_dialog = QDialog(self)
+        config_layout = QVBoxLayout(config_dialog)
+
+        # 显示设备信息
+        config_layout.addWidget(QLabel(f"设备信息: {device_info}"))
+        config_layout.addWidget(QLabel(f"产品型号: {product_model}"))
+        config_layout.addWidget(QLabel(f"MAC地址: {mac_address}"))
+
+        # 添加配置参数输入
+        config_layout.addWidget(QLabel("配置参数:"))
+        param_input = QLineEdit()
+        config_layout.addWidget(param_input)
+
+        # 确认按钮
+        confirm_btn = QPushButton("确认配置")
+        confirm_btn.clicked.connect(lambda: self.apply_config(row, param_input.text()))
+        config_layout.addWidget(confirm_btn)
+
+        config_dialog.exec_()
 
     def add_serial_port_tab(self):
         # 获取 QTabWidget 实例
