@@ -85,17 +85,14 @@ class MainWindow(QMainWindow):
 
         right_layout = QVBoxLayout()
 
-        label_layout = QHBoxLayout()
-        layout.addLayout(label_layout)
-
         # 创建按钮并按照指定布局排列
         button_layout = QGridLayout()
         self.buttons = {
             "K1": ButtonWithHighlight("K1"),
             "K2": ButtonWithHighlight("K2"),
-            "K3": ButtonWithHighlight("K3"),
-            "K4": ButtonWithHighlight("K4"),
-            "K5": ButtonWithHighlight("K5"),
+            "K3": ButtonWithHighlight("K5"),
+            "K4": ButtonWithHighlight("K3"),
+            "K5": ButtonWithHighlight("K4"),
             "K6": ButtonWithHighlight("K6")
         }
 
@@ -107,14 +104,21 @@ class MainWindow(QMainWindow):
             button_layout.addWidget(button, *position)
 
         right_layout.addLayout(button_layout)
+
+        # 添加用于显示分类信息的标签
+        self.classify_label = QLabel("暂无分类信息")
+        right_layout.addWidget(self.classify_label)
+
         layout.addLayout(right_layout)
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
+        self.dropped_texts = []  # 用于记录被拖入按钮的文本
+
     def add_grouped_devices(self):
         # 按区域分组添加设备
         areas = {
-            "卧室": ["床头灯", "壁灯"],
+            "卧室": ["床头灯", "壁灯", "总控", "明亮模式", "吊灯", "窗帘开", "睡眠模式", "窗帘关"],
             "卫浴": ["卫浴灯"]
         }
         for area, devices in areas.items():
@@ -127,9 +131,34 @@ class MainWindow(QMainWindow):
 
     def on_button_triggered(self, label_text):
         print(f"标签 '{label_text}' 被拖到了按钮上.")
+        self.dropped_texts.append(label_text)
+        result = classify_panel(self.dropped_texts)
+        print(result)
+        # 更新标签文本
+        self.classify_label.setText(result)
+
+
+def classify_panel(strings):
+    switch_count = 0
+    scene_count = 0
+    curtain_count = 0
+
+    for string in strings:
+        if string.endswith("灯"):
+            switch_count += 1
+        elif string.endswith("模式"):
+            scene_count += 1
+        elif "窗帘" in string:
+            curtain_count = 1  # 只要有窗帘相关操作，就认为是一个窗帘
+
+    result = f"{switch_count}开关，{scene_count}场景，{curtain_count}窗帘"
+    return result
 
 
 if __name__ == '__main__':
+    # 测试示例
+    strings = ["床头灯", "明亮模式", "吊灯", "窗帘开", "睡眠模式", "窗帘关"]
+    print(classify_panel(strings))
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
