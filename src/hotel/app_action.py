@@ -64,6 +64,17 @@ class App:
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_gateway_name")
         self.click_element_if_texts_exists("添加网关")
 
+    def add_m91p(self, device_id, deivce_class_name):
+        print(deivce_class_name)
+        self.unlock()
+        self.add_light_switchs()
+        sleep(1)
+        self.click_element_if_texts_exists("加入")
+        self.click_element_if_texts_exists("GP系列")
+        self.swipe_and_click_text(deivce_class_name)
+        self.click_element_if_texts_exists("下一步")
+        self.click_element_if_texts_exists("添加")
+
     def choose_project_name(self, hotel_name):
         self.device(resourceId="com.gemvary.vhpsmarthome:id/id_treenode_label", text=hotel_name).click()
         self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_gateway_name", text="无网关").click()
@@ -406,32 +417,40 @@ class App:
         # self.click_element_if_texts_exists("添加")
         # self.click_element_if_texts_exists("完成")
 
+    def swipe_up(self):
+        # 这里简单模拟向上滑动，你可以根据实际情况修改
+        width, height = self.device.window_size()
+        start_x = width * 0.5
+        start_y = height * 0.8
+        end_y = height * 0.2
+        self.device.swipe(start_x, start_y, start_x, end_y)
+
     def swipe_and_click_text(self, target_text, max_swipes=3, swipe_interval=1):
         """
         一边下滑屏幕一边匹配文本，找到匹配文本后点击
-        :param device: 已连接的设备对象
         :param target_text: 要匹配的文本
-        :param max_swipes: 最大滑动次数，避免无限滑动，默认为 10
+        :param max_swipes: 最大滑动次数，避免无限滑动，默认为 3
         :param swipe_interval: 每次滑动后的等待时间（秒），默认为 1
         :return: 如果找到并点击返回 True，否则返回 False
         """
+        print(target_text)
         swipe_count = 0
         while swipe_count < max_swipes:
-            # 查找匹配文本的元素
-            element = self.device(text=target_text)
+            # 查找文本包含目标文本的元素
+            element = self.device(textContains=target_text)
             if element.exists:
                 # 找到匹配元素，点击它
                 element.click()
-                print(f"找到文本 '{target_text}' 并点击")
+                print(f"找到包含文本 '{target_text}' 的元素并点击")
                 return True
             else:
                 # 未找到匹配元素，向下滑动屏幕
                 self.swipe_up()
                 swipe_count += 1
-                print(f"未找到文本，进行第 {swipe_count} 次滑动")
+                print(f"未找到包含文本 '{target_text}' 的元素，进行第 {swipe_count} 次滑动")
                 sleep(swipe_interval)  # 等待指定时间，让页面加载
 
-        print(f"滑动 {max_swipes} 次后仍未找到文本 '{target_text}'")
+        print(f"滑动 {max_swipes} 次后仍未找到包含文本 '{target_text}' 的元素")
         return False
 
 
@@ -489,7 +508,9 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-    d.locate_device_according_to_device_name(1)
+    # d.add_m91p("A8A", "2开关4场景")
+    # d.swipe_and_click_text("2开关2场景1窗帘")
+    d.locate_device_according_to_device_name(0)
     # d.start_app()
     # d.swipe_and_click_text("好")
     # d.apply_template("好", "GP系列")
