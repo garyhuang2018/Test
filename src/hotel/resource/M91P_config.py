@@ -1,6 +1,8 @@
 import sys
+import json
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QLabel, QWidget, \
-    QGridLayout, QListWidget, QListWidgetItem, QGroupBox
+    QGridLayout, QListWidget, QListWidgetItem, QGroupBox, QLineEdit, QMessageBox
+
 from PyQt5.QtCore import Qt, QMimeData, pyqtSignal
 from PyQt5.QtGui import QColor, QDrag
 
@@ -77,7 +79,8 @@ class MainWindow(QMainWindow):
 
         # 创建设备列表
         self.device_list = CustomListWidget()
-        self.add_grouped_devices()
+        self.areas = self.load_areas()
+        self.update_device_list()
         self.device_list.setDragEnabled(True)
         self.device_list.setAcceptDrops(False)
         self.device_list.setDefaultDropAction(Qt.MoveAction)
@@ -85,8 +88,27 @@ class MainWindow(QMainWindow):
 
         right_layout = QVBoxLayout()
 
+        # 创建操作按钮
+        self.add_button = QPushButton("添加")
+        self.add_button.clicked.connect(self.add_device)
+        self.delete_button = QPushButton("删除")
+        self.delete_button.clicked.connect(self.delete_device)
+        self.search_button = QPushButton("查找")
+        self.search_button.clicked.connect(self.search_device)
+        input_layout = QHBoxLayout()
+        self.input_area = QLineEdit()
+        self.input_device = QLineEdit()
+        input_layout.addWidget(self.input_area)
+        input_layout.addWidget(self.input_device)
+        button_layout = QHBoxLayout()
+        button_layout.addWidget(self.add_button)
+        button_layout.addWidget(self.delete_button)
+        button_layout.addWidget(self.search_button)
+        right_layout.addLayout(input_layout)
+        right_layout.addLayout(button_layout)
+
         # 创建按钮并按照指定布局排列
-        button_layout = QGridLayout()
+        button_grid_layout = QGridLayout()
         self.buttons = {
             "K1": ButtonWithHighlight("K1"),
             "K2": ButtonWithHighlight("K2"),
@@ -101,9 +123,9 @@ class MainWindow(QMainWindow):
         for position, name in zip(button_positions, self.buttons.keys()):
             button = self.buttons[name]
             button.triggered.connect(self.on_button_triggered)  # 连接信号到槽
-            button_layout.addWidget(button, *position)
+            button_grid_layout.addWidget(button, *position)
 
-        right_layout.addLayout(button_layout)
+        right_layout.addLayout(button_grid_layout)
 
         # 添加用于显示分类信息的标签
         self.classify_label = QLabel("暂无分类信息")
@@ -115,19 +137,64 @@ class MainWindow(QMainWindow):
 
         self.dropped_texts = []  # 用于记录被拖入按钮的文本
 
-    def add_grouped_devices(self):
-        # 按区域分组添加设备
-        areas = {
-            "卧室": ["床头灯", "壁灯", "总控", "明亮模式", "吊灯", "窗帘开", "睡眠模式", "窗帘关"],
-            "卫浴": ["卫浴灯"]
-        }
-        for area, devices in areas.items():
+    def load_areas(self):
+        try:
+            with open('devices.json', 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return {}
+
+    def save_areas(self):
+        with open('devices.json', 'w', encoding='utf-8') as f:
+            json.dump(self.areas, f, ensure_ascii=False, indent=4)
+
+    def update_device_list(self):
+        self.device_list.clear()
+        for area, devices in self.areas.items():
             group_box = QGroupBox(area)
             group_layout = QVBoxLayout()
             for device in devices:
                 item = QListWidgetItem(device)
                 self.device_list.addItem(item)
             group_box.setLayout(group_layout)
+
+    def add_device(self):
+        area = self.input_area.text()
+        device = self.input_device.text()
+        if area and device:
+            if area not in self.areas:
+                self.areas[area] = []
+            self.areas[area].append(device)
+            self.save_areas()
+            self.update_device_list()
+        else:
+            QMessageBox.warning(self, "警告", "请输入区域和设备名称")
+
+    def delete_device(self):
+        area = self.input_area.text()
+        device = self.input_device.text()
+        if area and device:
+            if area in self.areas and device in self.areas[area]:
+                self.areas[area].remove(device)
+                if not self.areas[area]:
+                    del self.areas[area]
+                self.save_areas()
+                self.update_device_list()
+            else:
+                QMessageBox.warning(self, "警告", "未找到该设备")
+        else:
+            QMessageBox.warning(self, "警告", "请输入区域和设备名称")
+
+    def search_device(self):
+        area = self.input_area.text()
+        device = self.input_device.text()
+        if area and device:
+            if area in self.areas and device in self.areas[area]:
+                QMessageBox.information(self, "查找结果", "找到该设备")
+            else:
+                QMessageBox.warning(self, "查找结果", "未找到该设备")
+        else:
+            QMessageBox.warning(self, "警告", "请输入区域和设备名称")
 
     def on_button_triggered(self, label_text):
         print(f"标签 '{label_text}' 被拖到了按钮上.")
@@ -144,7 +211,7 @@ def classify_panel(strings):
     curtain_count = 0
 
     for string in strings:
-        if string.endswith("灯"):
+        if string.endswith("灯") or string == "总控":
             switch_count += 1
         elif string.endswith("模式"):
             scene_count += 1
@@ -156,9 +223,6 @@ def classify_panel(strings):
 
 
 if __name__ == '__main__':
-    # 测试示例
-    strings = ["床头灯", "明亮模式", "吊灯", "窗帘开", "睡眠模式", "窗帘关"]
-    print(classify_panel(strings))
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
