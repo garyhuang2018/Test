@@ -73,9 +73,9 @@ class CustomListWidget(QListWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("可拖拽标签与固定按钮")
+        self.setWindowTitle("GP面板设置")
         central_widget = QWidget()
-        layout = QHBoxLayout()
+        main_layout = QHBoxLayout()
 
         # 创建设备列表
         self.device_list = CustomListWidget()
@@ -84,9 +84,9 @@ class MainWindow(QMainWindow):
         self.device_list.setDragEnabled(True)
         self.device_list.setAcceptDrops(False)
         self.device_list.setDefaultDropAction(Qt.MoveAction)
-        layout.addWidget(self.device_list)
+        main_layout.addWidget(self.device_list)
 
-        right_layout = QVBoxLayout()
+        left_right_layout = QVBoxLayout()
 
         # 创建操作按钮
         self.add_button = QPushButton("添加")
@@ -104,8 +104,8 @@ class MainWindow(QMainWindow):
         button_layout.addWidget(self.add_button)
         button_layout.addWidget(self.delete_button)
         button_layout.addWidget(self.search_button)
-        right_layout.addLayout(input_layout)
-        right_layout.addLayout(button_layout)
+        left_right_layout.addLayout(input_layout)
+        left_right_layout.addLayout(button_layout)
 
         # 创建按钮并按照指定布局排列
         button_grid_layout = QGridLayout()
@@ -125,14 +125,33 @@ class MainWindow(QMainWindow):
             button.triggered.connect(self.on_button_triggered)  # 连接信号到槽
             button_grid_layout.addWidget(button, *position)
 
-        right_layout.addLayout(button_grid_layout)
+        left_right_layout.addLayout(button_grid_layout)
 
         # 添加用于显示分类信息的标签
         self.classify_label = QLabel("暂无分类信息")
-        right_layout.addWidget(self.classify_label)
+        left_right_layout.addWidget(self.classify_label)
 
-        layout.addLayout(right_layout)
-        central_widget.setLayout(layout)
+        # 添加配置按钮
+        self.config_button = QPushButton("配置")
+        self.config_button.clicked.connect(self.show_config_panel)
+        left_right_layout.addWidget(self.config_button)
+
+        main_layout.addLayout(left_right_layout)
+
+        # 配置面板
+        self.config_panel = QWidget()
+        config_layout = QVBoxLayout()
+        self.config_label = QLabel("这是配置面板")
+        config_layout.addWidget(self.config_label)
+        self.config_panel.setLayout(config_layout)
+        self.config_panel.hide()
+
+        # 设置配置面板的大小
+        self.config_panel.setFixedSize(200, 200)
+
+        main_layout.addWidget(self.config_panel)
+
+        central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
         self.dropped_texts = []  # 用于记录被拖入按钮的文本
@@ -203,6 +222,13 @@ class MainWindow(QMainWindow):
         print(result)
         # 更新标签文本
         self.classify_label.setText(result)
+
+    def show_config_panel(self):
+        if self.config_panel.isHidden():
+
+            self.config_panel.show()
+        else:
+            self.config_panel.hide()
 
 
 def classify_panel(strings):

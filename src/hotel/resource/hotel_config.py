@@ -12,8 +12,8 @@ from api.server_request import fetch_hotel_list, fetch_hotel_rooms_no
 import sys
 import serial
 import serial.tools.list_ports
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, QFileDialog, QLabel, QDialog, QMenu, QLineEdit
-
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, \
+    QFileDialog, QLabel, QDialog, QMenu, QLineEdit, QListWidget
 from PyQt5.QtCore import QThread, pyqtSignal
 import datetime
 from openpyxl import Workbook
@@ -163,6 +163,14 @@ class SerialPortTab(QWidget):
         baud_layout.addWidget(baud_label)
         baud_layout.addWidget(self.baud_combo)
 
+        # 过滤框
+        filter_layout = QHBoxLayout()
+        filter_label = QLabel("Filter Keyword:")
+        self.filter_input = QLineEdit()
+        self.filter_input.textChanged.connect(self.update_filter)
+        filter_layout.addWidget(filter_label)
+        filter_layout.addWidget(self.filter_input)
+
         # 开始/停止按钮
         button_layout = QHBoxLayout()
         self.start_button = QPushButton("Start")
@@ -194,8 +202,15 @@ class SerialPortTab(QWidget):
         layout.addWidget(self.text_edit)
         layout.addLayout(export_layout)
         layout.addLayout(clear_layout)
-
+        layout.addLayout(filter_layout)
         self.setLayout(layout)
+
+    def update_filter(self, keyword):
+        self.filter_keyword = keyword
+        self.text_edit.clear()
+        for data in self.received_data:
+            if keyword in data:
+                self.text_edit.append(data)
 
     def filter_device_ids(self):
         print('filter')
@@ -259,8 +274,9 @@ class SerialPortTab(QWidget):
             self.stop_button.setEnabled(False)
 
     def update_text_edit(self, data):
-        self.text_edit.append(data)
         self.received_data.append(data)
+        if self.filter_keyword in data:
+            self.text_edit.append(data)
 
     def show_error(self, error_msg):
         PyQt5.QtWidgets.QMessageBox.critical(None, "Error", f"An error occurred: {error_msg}")
@@ -342,9 +358,9 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         if action == config_action:
             self.config_device(row, device_info, product_model, mac_address)
 
+    # 修改 PanelPreDebugTool 类中的 config_device 方法
     def config_device(self, row, device_info, product_model, mac_address):
         print('config device')
-        """配置设备的槽函数"""
         # 弹出配置对话框示例
         config_dialog = QDialog(self)
         config_layout = QVBoxLayout(config_dialog)
@@ -352,6 +368,15 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         # 显示设备信息
         config_layout.addWidget(QLabel(f"设备信息: {device_info}"))
         config_layout.addWidget(QLabel(f"产品型号: {product_model}"))
+
+        # 获取正确的 MAC 地址
+        cell_widget = self.table_widget.cellWidget(row, 2)
+        if isinstance(cell_widget, QComboBox):
+            mac_address = cell_widget.currentText()
+        else:
+            mac_address_item = self.table_widget.item(row, 2)
+            mac_address = mac_address_item.text() if mac_address_item else ""
+
         config_layout.addWidget(QLabel(f"MAC地址: {mac_address}"))
 
         # 添加配置参数输入
@@ -365,6 +390,9 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         config_layout.addWidget(confirm_btn)
 
         config_dialog.exec_()
+
+    def apply_config(self, row, text):
+        print(text)
 
     def add_serial_port_tab(self):
         # 获取 QTabWidget 实例
@@ -386,6 +414,18 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         export_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
         config_layout.addLayout(export_layout)
 
+        # 配置设备按钮
+        self.config_device_button = QPushButton("配置设备")
+        self.config_device_button.clicked.connect(self.show_config_dialog)
+        export_layout.addWidget(self.config_device_button)
+
+        export_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
+        config_layout.addLayout(export_layout)
+
+        self.setLayout(config_layout)
+        self.setWindowTitle('示例窗口')
+        self.show()
+
         # 添加标题区域
         title_layout = QHBoxLayout()
         self.project_label = QLabel("")  # 创建空标签，稍后填充内容
@@ -394,13 +434,28 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         title_layout.addStretch()
         config_layout.addLayout(title_layout)
 
-
-
         self.table_widget = PyQt5.QtWidgets.QTableWidget()
         self.table_widget.setColumnCount(3)
         self.table_widget.setHorizontalHeaderLabels(["设备信息", "产品型号", "设备MAC地址"])
         config_layout.addWidget(self.table_widget)
         self.stacked_widget.insertWidget(1, self.config_widget)
+
+    def show_config_dialog(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("配置设备")
+        list_widget = QListWidget(dialog)
+        steps = [
+            "第一步：连接手机",
+            "第二步：将蓝牙一路控制盒断电上电，所有连接控制盒的设备重新上电一次"
+
+        ]
+        for step in steps:
+
+            list_widget.addItem(step)
+        layout = QVBoxLayout()
+        layout.addWidget(list_widget)
+        dialog.setLayout(layout)
+        dialog.exec_()
 
     def show_page(self, item):
         index = self.sidebar_list.row(item)
@@ -705,11 +760,9 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         # 连接单元格点击信号到槽函数
         self.table_widget.cellClicked.connect(self.on_cell_clicked)
 
-    # on_mac_selection_changed 方法的实现
+    # 修改 PanelPreDebugTool 类中的 on_mac_selection_changed 方法
     def on_mac_selection_changed(self, combo_box):
-        # 获取当前触发信号的 combo_box 的 group_id
         current_group_id = combo_box.property("group_id")
-        print(current_group_id,'group id')
         selected_mac = combo_box.currentText()
 
         reply = PyQt5.QtWidgets.QMessageBox.question(
@@ -720,20 +773,17 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         )
 
         if reply == PyQt5.QtWidgets.QMessageBox.Yes:
-            # 遍历表格中的每一行
             for row in range(self.table_widget.rowCount()):
                 cell_widget = self.table_widget.cellWidget(row, 2)
                 if isinstance(cell_widget, QComboBox):
-                    # 获取当前单元格的 combo_box 的 group_id
                     cell_group_id = cell_widget.property("group_id")
                     if cell_group_id == current_group_id:
-                        # 创建一个新的 QTableWidgetItem 并设置其文本为所选的 MAC 地址
+                        # 创建新的 QTableWidgetItem 并设置文本
                         item = PyQt5.QtWidgets.QTableWidgetItem(selected_mac)
-                        # 设置该单元格为不可编辑状态
                         item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                         self.table_widget.setItem(row, 2, item)
-                        # 隐藏该下拉框
-                        cell_widget.hide()
+                        # 移除下拉框，避免后续获取旧值
+                        self.table_widget.setCellWidget(row, 2, None)
 
     def on_cell_clicked(self, row, column):
         # 只处理负载列（从第4列开始）且排除下拉选项行
