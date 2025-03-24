@@ -44,7 +44,7 @@ class App:
             else:
                 return
             self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_complete")
-            return  True
+            return True
 
     def get_info(self):
         return self.device.info
@@ -300,7 +300,7 @@ class App:
         return room_name
 
     def get_gateway_name(self):
-        element = self.device(resourceId = "com.gemvary.vhpsmarthome:id/tv_content")
+        element = self.device(resourceId="com.gemvary.vhpsmarthome:id/tv_content")
 
         if element.exists:
             gateway_name = element.get_text()
@@ -362,10 +362,18 @@ class App:
         print(f"应用版本: {app_info['versionName']}")
         return version
 
-    def apply_template(self, template_name,  device_name):
+    def single_controller_on_off(self):
+        """
+        单个蓝牙控制盒设备点击一次开关
+        """
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/tv_name")  # 点击一路控制盒图标
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/appCompatImageView6")
+
+    def apply_template(self, template_name, device_name):
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/iv_menu")
         self.device(text="模 板").click()
-        self.device.xpath('//android.widget.RelativeLayout/android.view.ViewGroup[1]/android.widget.ImageView[2]').click()
+        self.device.xpath(
+            '//android.widget.RelativeLayout/android.view.ViewGroup[1]/android.widget.ImageView[2]').click()
         self.swipe_and_click_text(template_name)
         self.device(resourceId="android:id/button1").click()
         sleep(1)
@@ -508,9 +516,10 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
+    d.single_controller_on_off()
     # d.add_m91p("A8A", "2开关4场景")
     # d.swipe_and_click_text("2开关2场景1窗帘")
-    d.locate_device_according_to_device_name(0)
+    # d.locate_device_according_to_device_name(0)
     # d.start_app()
     # d.swipe_and_click_text("好")
     # d.apply_template("好", "GP系列")
