@@ -1,6 +1,7 @@
 import sys
 import json
 from pathlib import Path
+from time import sleep
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit,
@@ -45,6 +46,24 @@ class AddAndReplaceDevicesThread(QThread):
             self.finished.emit(f"已成功添加并替换设备：{self.room_name} -> {self.device_name}")
         except Exception as e:
             self.error.emit(f"执行过程中出现错误：{str(e)}")
+
+
+class LogMonitorThread(QThread):
+    new_data = pyqtSignal(list)
+
+    def __init__(self, app_instance):
+        super().__init__()
+        self.d = app_instance
+
+    def run(self):
+        while True:
+            print('run log monitor')
+            device_info_list = self.d.get_device_info()  # 假设 App 类有 get_device_info 方法
+            if device_info_list:
+                print(device_info_list)
+                self.new_data.emit(device_info_list)
+                break
+            sleep(1)  # 每秒检查一次
 
 
 class ApplyTemplateWindow(QWidget):
@@ -124,6 +143,14 @@ class ApplyTemplateWindow(QWidget):
         self.device_table.setHorizontalHeaderLabels(['设备名称'])
         self.device_table.horizontalHeader().setStretchLastSection(True)
 
+        # 新增：创建搜索设备和通断电开关按钮
+        search_device_btn = QPushButton('搜索设备')
+        power_switch_btn = QPushButton('通断电开关')
+
+        # 为按钮添加点击事件处理函数（这里暂时为空，你可以根据需求实现具体逻辑）
+        search_device_btn.clicked.connect(self.on_search_device_click)
+        power_switch_btn.clicked.connect(self.on_power_switch_click)
+
         input_layout = QGridLayout()
         input_layout.addWidget(apply_room_label, 0, 0)
         input_layout.addWidget(self.apply_room_input, 0, 1)
@@ -138,7 +165,10 @@ class ApplyTemplateWindow(QWidget):
         input_layout.addWidget(self.replace_room_input, 4, 1)
         input_layout.addWidget(replace_device_label, 5, 0)
         input_layout.addWidget(self.replace_device_input, 5, 1)
-        input_layout.addWidget(replace_btn, 6, 0, 1, 2)
+        # 新增：将搜索设备和通断电开关按钮添加到布局中，与添加并替换设备按钮同一行
+        input_layout.addWidget(replace_btn, 6, 0)
+        input_layout.addWidget(search_device_btn, 6, 1)
+        input_layout.addWidget(power_switch_btn, 6, 2)
         input_tab.setLayout(input_layout)
 
         # 创建操作记录标签页
@@ -214,6 +244,34 @@ class ApplyTemplateWindow(QWidget):
     def show_error_message(self, message):
         QMessageBox.critical(self, "执行错误", message)
         self.record_text_edit.append(message)
+
+    # 新增：搜索设备按钮点击事件处理函数
+    def on_search_device_click(self):
+        self.d.add_light_switchs()
+        self.log_monitor_thread = LogMonitorThread(self.d)
+        self.log_monitor_thread.new_data.connect(self.update_device_table)
+        self.log_monitor_thread.start()
+        QMessageBox.information(self, "提示", "请将设备断电、上电")
+
+    # 新增：更新设备表格的方法
+    def update_device_table(self, device_info_list):
+        print("update", device_info_list)
+        # self.device_table.setRowCount(0)
+        # if device_info_list:
+        #     for i, name in enumerate(device_info_list):
+        #         self.device_table.insertRow(i)
+        #         item = QTableWidgetItem(name)
+        #         self.device_table.setItem(i, 0, item)
+        # else:
+        #     self.device_table.insertRow(0)
+        #     item = QTableWidgetItem("未找到设备名称")
+        #     self.device_table.setItem(0, 0, item)
+
+    # 新增：通断电开关按钮点击事件处理函数
+    def on_power_switch_click(self):
+        self.d.single_controller_on_off()
+        # 这里可以实现通断电开关的具体逻辑
+        # QMessageBox.information(self, "提示", "通断电开关功能待实现")
 
 
 if __name__ == '__main__':

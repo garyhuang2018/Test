@@ -383,6 +383,20 @@ class App:
         # 使用现有 get_log_data 方法获取匹配结果
         return self.get_log_data(pattern)
 
+    def get_device_info(self):
+        """从日志中提取设备ID和名称"""
+        # 正则表达式模式，匹配deviceId和deviceName
+        pattern = r"deviceId='([^']+)', deviceName='([^']+)'"
+        matches = self.get_log_data(pattern)
+
+        devices = []
+        for device_id, device_name in matches:
+            devices.append({
+                'deviceId': device_id,
+                'deviceName': device_name
+            })
+        return devices
+
     def get_gateway_ip_address(self):
         # 正则表达式模式，用于匹配 ip 的值
         pattern = r"ip\s*=\s*([\d:]+)"
@@ -504,7 +518,6 @@ class App:
         # 超过最大尝试次数
         print(f"警告：尝试{max_attempts}次后仍未找到替换按钮，请检查设备状态")
 
-
     def swipe_up(self):
         # 这里简单模拟向上滑动，你可以根据实际情况修改
         width, height = self.device.window_size()
@@ -541,6 +554,12 @@ class App:
         print(f"滑动 {max_swipes} 次后仍未找到包含文本 '{target_text}' 的元素")
         return False
 
+    def monitor_logs(self, callback, interval=1):
+        """实时监听日志并触发回调"""
+        while True:
+            logs = self.get_log_data(r".*")  # 获取所有日志
+            callback(logs)
+            time.sleep(interval)
 
 def device_locate(device):
     try:
@@ -596,9 +615,19 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-    # 调用方法获取设备名称列表
-    device_names = d.get_device_names()
-    print("提取到的设备名称：", device_names)
-    # d.apply_template("工厂预调试9室", "好")
-    # d.add_and_replace_devices("工厂预调试2室", "2开关2场景")
+    # 定义回调函数（处理日志的逻辑）
+    def log_callback(logs):
+        # 在这里处理实时获取的日志
+        for log in logs:
+            print(f"实时日志: {log}")
+            # 示例：检测特定关键词
+            if "deviceName" in log:
+                print("发现设备名称信息")
+
+
+    # 启动实时监听（间隔1秒）
+    try:
+        d.monitor_logs(log_callback, interval=1)
+    except KeyboardInterrupt:
+        print("\n停止监听")
 
