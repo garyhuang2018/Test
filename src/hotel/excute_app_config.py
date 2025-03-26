@@ -5,7 +5,7 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit,
     QPushButton, QVBoxLayout, QGridLayout, QMessageBox,
-    QTabWidget, QTextEdit
+    QTabWidget, QTextEdit, QTableWidget, QTableWidgetItem
 )
 
 from app_action import App
@@ -118,6 +118,12 @@ class ApplyTemplateWindow(QWidget):
         replace_btn = QPushButton('添加并替换设备')
         replace_btn.clicked.connect(self.on_replace_click)
 
+        # 新增：创建 QTableWidget 用于显示设备名称
+        self.device_table = QTableWidget()
+        self.device_table.setColumnCount(1)
+        self.device_table.setHorizontalHeaderLabels(['设备名称'])
+        self.device_table.horizontalHeader().setStretchLastSection(True)
+
         input_layout = QGridLayout()
         input_layout.addWidget(apply_room_label, 0, 0)
         input_layout.addWidget(self.apply_room_input, 0, 1)
@@ -125,11 +131,14 @@ class ApplyTemplateWindow(QWidget):
         input_layout.addWidget(self.apply_template_input, 1, 1)
         input_layout.addWidget(apply_btn, 2, 0, 1, 2)
 
-        input_layout.addWidget(replace_room_label, 3, 0)
-        input_layout.addWidget(self.replace_room_input, 3, 1)
-        input_layout.addWidget(replace_device_label, 4, 0)
-        input_layout.addWidget(self.replace_device_input, 4, 1)
-        input_layout.addWidget(replace_btn, 5, 0, 1, 2)
+        # 新增：将表格添加到布局中
+        input_layout.addWidget(self.device_table, 3, 0, 1, 2)
+
+        input_layout.addWidget(replace_room_label, 4, 0)
+        input_layout.addWidget(self.replace_room_input, 4, 1)
+        input_layout.addWidget(replace_device_label, 5, 0)
+        input_layout.addWidget(self.replace_device_input, 5, 1)
+        input_layout.addWidget(replace_btn, 6, 0, 1, 2)
         input_tab.setLayout(input_layout)
 
         # 创建操作记录标签页
@@ -186,6 +195,21 @@ class ApplyTemplateWindow(QWidget):
     def show_success_message(self, message):
         QMessageBox.information(self, "成功", message)
         self.record_text_edit.append(message)
+
+        # 新增：当应用模板成功后，获取并显示设备名称
+        if "已成功应用模板" in message:
+            device_names = self.d.get_device_names()
+            # 清空表格
+            self.device_table.setRowCount(0)
+            if device_names:
+                for i, name in enumerate(device_names):
+                    self.device_table.insertRow(i)
+                    item = QTableWidgetItem(name)
+                    self.device_table.setItem(i, 0, item)
+            else:
+                self.device_table.insertRow(0)
+                item = QTableWidgetItem("未找到设备名称")
+                self.device_table.setItem(0, 0, item)
 
     def show_error_message(self, message):
         QMessageBox.critical(self, "执行错误", message)
