@@ -6,7 +6,8 @@ from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit,
     QPushButton, QVBoxLayout, QGridLayout, QMessageBox,
-    QTabWidget, QTextEdit, QTableWidget, QTableWidgetItem
+    QTabWidget, QTextEdit, QTableWidget, QTableWidgetItem,
+    QComboBox
 )
 
 from app_action import App
@@ -54,16 +55,17 @@ class LogMonitorThread(QThread):
     def __init__(self, app_instance):
         super().__init__()
         self.d = app_instance
+        self.running = True
 
     def run(self):
-        while True:
-            print('run log monitor')
-            device_info_list = self.d.get_device_info()  # 假设 App 类有 get_device_info 方法
+        while self.running:
+            device_info_list = self.d.get_device_info()
             if device_info_list:
-                print(device_info_list)
                 self.new_data.emit(device_info_list)
-                break
             sleep(1)  # 每秒检查一次
+
+    def stop(self):
+        self.running = False
 
 
 class ApplyTemplateWindow(QWidget):
@@ -73,6 +75,9 @@ class ApplyTemplateWindow(QWidget):
         self.config_path = Path.home() / ".vhpsmarthome_config.json"
         self.load_config()
         self.initUI()
+        self.log_monitor_thread = None
+        self.applied_devices = []
+        self.selected_device = None
 
     def load_config(self):
         if self.config_path.exists():
@@ -139,8 +144,8 @@ class ApplyTemplateWindow(QWidget):
 
         # 新增：创建 QTableWidget 用于显示设备名称
         self.device_table = QTableWidget()
-        self.device_table.setColumnCount(1)
-        self.device_table.setHorizontalHeaderLabels(['设备名称'])
+        self.device_table.setColumnCount(2)
+        self.device_table.setHorizontalHeaderLabels(['应用模板获取的设备名称', '搜索设备上报的设备名称'])
         self.device_table.horizontalHeader().setStretchLastSection(True)
 
         # 新增：创建搜索设备和通断电开关按钮
@@ -169,6 +174,7 @@ class ApplyTemplateWindow(QWidget):
         input_layout.addWidget(replace_btn, 6, 0)
         input_layout.addWidget(search_device_btn, 6, 1)
         input_layout.addWidget(power_switch_btn, 6, 2)
+
         input_tab.setLayout(input_layout)
 
         # 创建操作记录标签页
@@ -229,17 +235,14 @@ class ApplyTemplateWindow(QWidget):
         # 新增：当应用模板成功后，获取并显示设备名称
         if "已成功应用模板" in message:
             device_names = self.d.get_device_names()
+            self.applied_devices = device_names
             # 清空表格
             self.device_table.setRowCount(0)
-            if device_names:
-                for i, name in enumerate(device_names):
-                    self.device_table.insertRow(i)
-                    item = QTableWidgetItem(name)
-                    self.device_table.setItem(i, 0, item)
-            else:
-                self.device_table.insertRow(0)
-                item = QTableWidgetItem("未找到设备名称")
-                self.device_table.setItem(0, 0, item)
+            max_length = max(len(self.applied_devices), 0)
+            self.device_table.setRowCount(max_length)
+            for i, name in enumerate(self.applied_devices):
+                item = QTableWidgetItem(name)
+                self.device_table.setItem(i, 0, item)
 
     def show_error_message(self, message):
         QMessageBox.critical(self, "执行错误", message)
@@ -248,6 +251,8 @@ class ApplyTemplateWindow(QWidget):
     # 新增：搜索设备按钮点击事件处理函数
     def on_search_device_click(self):
         self.d.add_light_switchs()
+        if self.log_monitor_thread is not None:
+            self.log_monitor_thread.stop()
         self.log_monitor_thread = LogMonitorThread(self.d)
         self.log_monitor_thread.new_data.connect(self.update_device_table)
         self.log_monitor_thread.start()
@@ -256,16 +261,26 @@ class ApplyTemplateWindow(QWidget):
     # 新增：更新设备表格的方法
     def update_device_table(self, device_info_list):
         print("update", device_info_list)
-        # self.device_table.setRowCount(0)
-        # if device_info_list:
-        #     for i, name in enumerate(device_info_list):
-        #         self.device_table.insertRow(i)
-        #         item = QTableWidgetItem(name)
-        #         self.device_table.setItem(i, 0, item)
-        # else:
-        #     self.device_table.insertRow(0)
-        #     item = QTableWidgetItem("未找到设备名称")
-        #     self.device_table.setItem(0, 0, item)
+        device_names = [info.get('deviceName', '未知设备') for info in device_info_list]
+        # 清空表格
+        self.device_table.setRowCount(0)
+        max_length = max(len(self.applied_devices), len(device_names))
+        self.device_table.setRowCount(max_length)
+        for i, name in enumerate(self.applied_devices):
+            item = QTableWidgetItem(name)
+            self.device_table.setItem(i, 0, item)
+
+        for i in range(self.device_table.rowCount()):
+            combo_box = QComboBox()
+            for name in device_names:
+                combo_box.addItem(name)
+            combo_box.currentIndexChanged.connect(
+                lambda index, row=i: self.fix_selection(row, combo_box.itemText(index)))
+            self.device_table.setCellWidget(i, 1, combo_box)
+
+    def fix_selection(self, row, selected_device):
+        item = QTableWidgetItem(selected_device)
+        self.device_table.setItem(row, 1, item)
 
     # 新增：通断电开关按钮点击事件处理函数
     def on_power_switch_click(self):

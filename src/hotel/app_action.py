@@ -261,7 +261,7 @@ class App:
     def locate_device_according_to_device_name(self, index):
         # 根据文本找到目标元素
         target_text = "定位"
-        target_element = d.device(text=target_text)
+        target_element = self.device(text=target_text)
         text_list = []
         if target_element.exists:
             # 获取目标元素的 xpath
@@ -270,7 +270,7 @@ class App:
             parent_xpath = f'{target_xpath}/..'
             # 直接使用完整 xpath 查找父元素下的其他文本元素
             other_text_elements_xpath = f'{parent_xpath}//*[@text!=""]'
-            other_text_elements = d.device.xpath(other_text_elements_xpath).all()
+            other_text_elements = self.device.xpath(other_text_elements_xpath).all()
 
             # 遍历并筛选出包含“超级设备”文本的元素并输出
             for element in other_text_elements:
@@ -280,6 +280,7 @@ class App:
             print(text_list[index])
         else:
             print("未找到目标文本元素")
+
     #
     # def swipe_up(self):
     #     # 滑动操作示例
@@ -390,11 +391,14 @@ class App:
         matches = self.get_log_data(pattern)
 
         devices = []
+        device_ids = set()
         for device_id, device_name in matches:
-            devices.append({
-                'deviceId': device_id,
-                'deviceName': device_name
-            })
+            if device_id not in device_ids:
+                devices.append({
+                    'deviceId': device_id,
+                    'deviceName': device_name
+                })
+                device_ids.add(device_id)
         return devices
 
     def get_gateway_ip_address(self):
@@ -514,7 +518,6 @@ class App:
                 print(f"未找到替换按钮，执行单控操作（第{replace_attempts}/{max_attempts}次）")
                 sleep(2)  # 等待操作生效
 
-
         # 超过最大尝试次数
         print(f"警告：尝试{max_attempts}次后仍未找到替换按钮，请检查设备状态")
 
@@ -560,6 +563,7 @@ class App:
             logs = self.get_log_data(r".*")  # 获取所有日志
             callback(logs)
             time.sleep(interval)
+
 
 def device_locate(device):
     try:
@@ -615,7 +619,10 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
+
+
     # 定义回调函数（处理日志的逻辑）
+
     def log_callback(logs):
         # 在这里处理实时获取的日志
         for log in logs:
@@ -630,4 +637,3 @@ if __name__ == "__main__":
         d.monitor_logs(log_callback, interval=1)
     except KeyboardInterrupt:
         print("\n停止监听")
-
