@@ -26,6 +26,7 @@ def extract_project_name(file_name):
         return file_name.split("项目交付文档")[0].strip()
     return None
 
+
 def match_project_with_hotels(project_name, hotel_list_data):
     if isinstance(hotel_list_data, dict):
         hotel_list = hotel_list_data.get('data', {}).get('data', [])
@@ -382,6 +383,33 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         # ...原有初始化代码...
         self.table_widget.setContextMenuPolicy(Qt.CustomContextMenu)  # 添加右键菜单策略
         self.table_widget.customContextMenuRequested.connect(self.show_context_menu)  # 连接右键菜单事件
+        self.fixed_loads = self.load_fixed_loads()  # 类属性存储负载列表
+
+    def load_fixed_loads(self):
+        """动态加载负载配置"""
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(base_dir, 'config', 'loads_config.txt')
+
+        # 默认负载列表
+        default_loads = [
+            "卫浴灯", "射灯", "排风扇", "灯带", "床头灯",
+            "明亮模式", "窗帘开", "吊灯", "睡眠模式",
+            "排气扇", "窗帘关", "玄关灯"
+        ]
+
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                loaded_loads = [line.strip() for line in f if line.strip()]
+                if not loaded_loads:
+                    print("[WARNING] 配置文件为空，使用默认负载列表")
+                    return default_loads
+                return loaded_loads
+        except FileNotFoundError:
+            print("[WARNING] 未找到负载配置文件，使用默认值")
+            return default_loads
+        except UnicodeDecodeError:
+            print("[ERROR] 配置文件编码错误，必须使用UTF-8格式")
+            return default_loads
 
     def show_context_menu(self, pos):
         """显示右键菜单"""
@@ -718,7 +746,7 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         except FileNotFoundError:
             print(f"未找到保存 MAC 地址列表的文件 {MAC_LIST}")
         # 固定的负载名称列表
-        fixed_loads = ["卫浴灯", "射灯", "排风扇", "灯带", "床头灯", "明亮模式", "窗帘开", "吊灯", "睡眠模式", "排气扇", "窗帘关", "玄关灯"]
+        fixed_loads = self.load_fixed_loads()  # 修改这里
 
         # 找出所有出现的负载
         all_loads = set()
