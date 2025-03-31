@@ -13,7 +13,7 @@ import sys
 import serial
 import serial.tools.list_ports
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, \
-    QFileDialog, QLabel, QDialog, QMenu, QLineEdit, QListWidget
+    QFileDialog, QLabel, QDialog, QMenu, QLineEdit, QListWidget, QTableWidgetItem
 from PyQt5.QtCore import QThread, pyqtSignal
 import datetime
 from openpyxl import Workbook
@@ -25,7 +25,6 @@ def extract_project_name(file_name):
     if "项目交付文档" in file_name:
         return file_name.split("项目交付文档")[0].strip()
     return None
-
 
 def match_project_with_hotels(project_name, hotel_list_data):
     if isinstance(hotel_list_data, dict):
@@ -322,6 +321,7 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         self.add_serial_port_tab()  # 添加串口Tab页面
         self.current_hotel = ""  # 新增属性保存酒店名称
         self.current_room = ""  #
+        self.saved_table_file = "saved_table_info.json"  # 保存文件名
         # ...原有初始化代码...
         self.table_widget.setContextMenuPolicy(Qt.CustomContextMenu)  # 添加右键菜单策略
         self.table_widget.customContextMenuRequested.connect(self.show_context_menu)  # 连接右键菜单事件
@@ -380,7 +380,7 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         config_layout.addWidget(QLabel(f"MAC地址: {mac_address}"))
 
         # 添加配置参数输入
-        config_layout.addWidget(QLabel("配置参数:"))
+        config_layout.addWidget(QLabel("配置设备型号:"))
         param_input = QLineEdit()
         config_layout.addWidget(param_input)
 
@@ -392,6 +392,7 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         config_dialog.exec_()
 
     def apply_config(self, row, text):
+
         print(text)
 
     def add_serial_port_tab(self):
@@ -411,11 +412,21 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         self.export_table_button = QPushButton("导出表格")
         self.export_table_button.clicked.connect(self.export_table)
         export_layout.addWidget(self.export_table_button)
+
+        # 新增保存和还原按钮
+        save_button = QPushButton("保存表格信息", self)
+        save_button.clicked.connect(self.save_table_info)
+        export_layout.addWidget(save_button)
+
+        restore_button = QPushButton("还原表格信息", self)
+        restore_button.clicked.connect(self.restore_table_info)
+        export_layout.addWidget(restore_button)
+
         export_layout.addStretch()  # 添加弹性空间，使按钮靠左对齐
         config_layout.addLayout(export_layout)
 
-        # 配置设备按钮
-        self.config_device_button = QPushButton("配置设备")
+        # 应用模板按钮
+        self.config_device_button = QPushButton("应用模板")
         self.config_device_button.clicked.connect(self.show_config_dialog)
         export_layout.addWidget(self.config_device_button)
 
@@ -440,17 +451,72 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         config_layout.addWidget(self.table_widget)
         self.stacked_widget.insertWidget(1, self.config_widget)
 
+    def save_table_info(self):
+        """保存表格中所有标记为√或X的单元格信息"""
+        save_data = []
+        for row in range(self.table_widget.rowCount()):
+            for col in range(self.table_widget.columnCount()):
+                item = self.table_widget.item(row, col)
+                if item and (item.text() in ("√", "X")):
+                    save_data.append({
+                        "row": row,
+                        "col": col,
+                        "value": item.text()
+                    })
+        try:
+            with open(self.saved_table_file, "w", encoding="utf-8") as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            PyQt5.QtWidgets.QMessageBox.information(
+                self, "保存成功", f"表格信息已保存至{self.saved_table_file}")
+        except Exception as e:
+            PyQt5.QtWidgets.QMessageBox.critical(
+                self, "保存失败", f"保存时发生错误：{str(e)}")
+
+    def restore_table_info(self):
+        """还原表格中标记为√或X的单元格信息"""
+        try:
+            with open(self.saved_table_file, "r", encoding="utf-8") as f:
+                save_data = json.load(f)
+        except FileNotFoundError:
+            PyQt5.QtWidgets.QMessageBox.warning(
+                self, "还原失败", "未找到保存的表格信息文件")
+            return
+        except Exception as e:
+            PyQt5.QtWidgets.QMessageBox.critical(
+                self, "还原失败", f"读取文件时发生错误：{str(e)}")
+            return
+
+        # 先清空所有现有标记
+        for row in range(self.table_widget.rowCount()):
+            for col in range(self.table_widget.columnCount()):
+                item = self.table_widget.item(row, col)
+                if item and item.text() in ("√", "X"):
+                    item.setText("")
+
+        # 还原保存的标记
+        for entry in save_data:
+            row = entry["row"]
+            col = entry["col"]
+            value = entry["value"]
+
+            if row < self.table_widget.rowCount() and col < self.table_widget.columnCount():
+                item = self.table_widget.item(row, col)
+                if not item:
+                    item = PyQt5.QtWidgets.QTableWidgetItem()
+                    self.table_widget.setItem(row, col, item)
+                item.setText(value)
+
     def show_config_dialog(self):
         dialog = QDialog(self)
-        dialog.setWindowTitle("配置设备")
+        dialog.setWindowTitle("应用模板")
         list_widget = QListWidget(dialog)
         steps = [
             "第一步：连接手机",
-            "第二步：将蓝牙一路控制盒断电上电，所有连接控制盒的设备重新上电一次"
+            "第二步：将蓝牙一路控制盒断电上电，所有连接控制盒的设备重新上电一次",
+            "第三步：将蓝牙一路控制盒断电上电，所有连接控制盒的设备重新上电一次"
 
         ]
         for step in steps:
-
             list_widget.addItem(step)
         layout = QVBoxLayout()
         layout.addWidget(list_widget)
@@ -703,15 +769,55 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
                     else:
                         # MAC 地址为空时显示提示信息
                         self.table_widget.setItem(current_row, 2, PyQt5.QtWidgets.QTableWidgetItem("无可用 MAC 地址后4位"))
-                    self.table_widget.setItem(current_row, 3, PyQt5.QtWidgets.QTableWidgetItem(load))
-                    for col, load_col in enumerate(filtered_loads, start=4):
-                        item = PyQt5.QtWidgets.QTableWidgetItem()
-                        if load_col == load:
-                            item.setText("√")
-                        self.table_widget.setItem(current_row, col, item)
-                    group.append(current_row)
-                    row_groups.append(group_id)
-                    current_row += 1
+                    if "插卡" in device_info:
+                        # 添加“插卡”操作
+                        insert_card_item = PyQt5.QtWidgets.QTableWidgetItem("插卡")
+                        self.table_widget.setItem(current_row, 3, insert_card_item)
+                        # 插入新行添加“拔卡”操作
+                        self.table_widget.insertRow(current_row + 1)
+                        # 复制设备信息到新行
+                        new_device_info_item = PyQt5.QtWidgets.QTableWidgetItem(device_info)
+                        self.table_widget.setItem(current_row + 1, 0, new_device_info_item)
+                        # 复制产品型号到新行
+                        new_product_model_item = PyQt5.QtWidgets.QTableWidgetItem(product_model)
+                        new_product_model_item.setTextAlignment(Qt.AlignVCenter | Qt.TextWordWrap)
+                        self.table_widget.setItem(current_row + 1, 1, new_product_model_item)
+                        if mac_list:
+                            # 创建新的下拉列表
+                            new_combo_box = QComboBox()
+                            new_combo_box.addItems(mac_list)
+                            new_combo_box.setProperty("group_id", group_id)
+                            new_combo_box.currentIndexChanged.connect(
+                                functools.partial(self.on_mac_selection_changed, new_combo_box))
+                            self.table_widget.setCellWidget(current_row + 1, 2, new_combo_box)
+                        else:
+                            # MAC 地址为空时显示提示信息
+                            self.table_widget.setItem(current_row + 1, 2,
+                                                      PyQt5.QtWidgets.QTableWidgetItem("无可用 MAC 地址后4位"))
+                        # 添加“拔卡”操作
+                        remove_card_item = PyQt5.QtWidgets.QTableWidgetItem("拔卡")
+                        self.table_widget.setItem(current_row + 1, 3, remove_card_item)
+                        # 复制负载信息到新行
+                        for col, load_col in enumerate(filtered_loads, start=4):
+                            item = PyQt5.QtWidgets.QTableWidgetItem()
+                            if load_col == load:
+                                item.setText("√")
+                            self.table_widget.setItem(current_row + 1, col, item)
+                        group.append(current_row)
+                        group.append(current_row + 1)
+                        row_groups.append(group_id)
+                        row_groups.append(group_id)
+                        current_row += 2
+                    else:
+                        self.table_widget.setItem(current_row, 3, PyQt5.QtWidgets.QTableWidgetItem(load))
+                        for col, load_col in enumerate(filtered_loads, start=4):
+                            item = PyQt5.QtWidgets.QTableWidgetItem()
+                            if load_col == load:
+                                item.setText("√")
+                            self.table_widget.setItem(current_row, col, item)
+                        group.append(current_row)
+                        row_groups.append(group_id)
+                        current_row += 1
                     has_load = True
             if not has_load:
                 self.table_widget.setItem(current_row, 0, PyQt5.QtWidgets.QTableWidgetItem(device_info))
@@ -728,13 +834,50 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
                 else:
                     # MAC 地址为空时显示提示信息
                     self.table_widget.setItem(current_row, 2, PyQt5.QtWidgets.QTableWidgetItem("无可用 MAC 地址后4位"))
-                self.table_widget.setItem(current_row, 3, PyQt5.QtWidgets.QTableWidgetItem(""))
-                for col in range(4, 4 + len(filtered_loads)):
-                    item = PyQt5.QtWidgets.QTableWidgetItem()
-                    self.table_widget.setItem(current_row, col, item)
-                group.append(current_row)
-                row_groups.append(group_id)
-                current_row += 1
+                if "插卡" in device_info:
+                    # 添加“插卡”操作
+                    insert_card_item = PyQt5.QtWidgets.QTableWidgetItem("插卡")
+                    self.table_widget.setItem(current_row, 3, insert_card_item)
+                    # 插入新行添加“拔卡”操作
+                    self.table_widget.insertRow(current_row + 1)
+                    # 复制设备信息到新行
+                    new_device_info_item = PyQt5.QtWidgets.QTableWidgetItem(device_info)
+                    self.table_widget.setItem(current_row + 1, 0, new_device_info_item)
+                    # 复制产品型号到新行
+                    new_product_model_item = PyQt5.QtWidgets.QTableWidgetItem(product_model)
+                    new_product_model_item.setTextAlignment(Qt.AlignVCenter | Qt.TextWordWrap)
+                    self.table_widget.setItem(current_row + 1, 1, new_product_model_item)
+                    if mac_list:
+                        # 创建新的下拉列表
+                        new_combo_box = QComboBox()
+                        new_combo_box.addItems(mac_list)
+                        new_combo_box.setProperty("group_id", group_id)
+                        new_combo_box.currentIndexChanged.connect(
+                            functools.partial(self.on_mac_selection_changed, new_combo_box))
+                        self.table_widget.setCellWidget(current_row + 1, 2, new_combo_box)
+                    else:
+                        # MAC 地址为空时显示提示信息
+                        self.table_widget.setItem(current_row + 1, 2, PyQt5.QtWidgets.QTableWidgetItem("无可用 MAC 地址后4位"))
+                    # 添加“拔卡”操作
+                    remove_card_item = PyQt5.QtWidgets.QTableWidgetItem("拔卡")
+                    self.table_widget.setItem(current_row + 1, 3, remove_card_item)
+                    # 复制负载信息到新行
+                    for col in range(4, 4 + len(filtered_loads)):
+                        item = PyQt5.QtWidgets.QTableWidgetItem()
+                        self.table_widget.setItem(current_row + 1, col, item)
+                    group.append(current_row)
+                    group.append(current_row + 1)
+                    row_groups.append(group_id)
+                    row_groups.append(group_id)
+                    current_row += 2
+                else:
+                    self.table_widget.setItem(current_row, 3, PyQt5.QtWidgets.QTableWidgetItem(""))
+                    for col in range(4, 4 + len(filtered_loads)):
+                        item = PyQt5.QtWidgets.QTableWidgetItem()
+                        self.table_widget.setItem(current_row, col, item)
+                    group.append(current_row)
+                    row_groups.append(group_id)
+                    current_row += 1
             group_id += 1
 
         # 合并同一原始行的设备信息和产品型号单元格
