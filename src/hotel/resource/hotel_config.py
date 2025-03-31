@@ -6,7 +6,7 @@ import re
 import pandas as pd
 from PyQt5 import uic
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QMetaObject, Qt, Q_ARG
 import PyQt5.QtWidgets
 from api.server_request import fetch_hotel_list, fetch_hotel_rooms_no
 import sys
@@ -109,18 +109,23 @@ class SerialThread(QThread):
 
     def run(self):
         try:
+            print(f"[DEBUG] 正在打开串口 {self.port_name}，波特率 {self.baud_rate}")  # 调试日志
             self.ser = serial.Serial(self.port_name, self.baud_rate, timeout=1)
+            print("[DEBUG] 串口已成功打开")
             while self.is_running:
                 if self.ser.in_waiting > 0:
                     data = self.ser.readline().decode('utf-8', errors='ignore').strip()
+                    print(f"[DEBUG] 接收原始数据: {data}")  # 输出原始数据
                     if data:
                         timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         formatted_data = f"{timestamp} - {data}"
                         self.data_received.emit(formatted_data)
                         self.buffer += formatted_data + "\n"
         except Exception as e:
+            print(f"[ERROR] 串口线程异常: {e}")  # 输出详细错误
             self.error_occurred.emit(str(e))
         finally:
+            print("[DEBUG] 正在关闭串口")
             if self.ser and self.ser.is_open:
                 self.ser.close()
 
@@ -273,9 +278,12 @@ class SerialPortTab(QWidget):
             self.stop_button.setEnabled(False)
 
     def update_text_edit(self, data):
-        self.received_data.append(data)
-        if self.filter_keyword in data:
-            self.text_edit.append(data)
+        QMetaObject.invokeMethod(
+            self.text_edit,
+            "append",
+            Qt.QueuedConnection,
+            Q_ARG(str, data)
+        )
 
     def show_error(self, error_msg):
         PyQt5.QtWidgets.QMessageBox.critical(None, "Error", f"An error occurred: {error_msg}")
@@ -434,7 +442,6 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         config_layout.addLayout(export_layout)
 
         self.setLayout(config_layout)
-        self.setWindowTitle('示例窗口')
         self.show()
 
         # 添加标题区域
@@ -705,10 +712,9 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
         # 过滤掉包含"模式"的负载列
         filtered_loads = [load for load in all_loads if "模式" not in load]
 
-        # 设置列数和表头
-        self.table_widget.setColumnCount(4 + len(filtered_loads))
-        # 修改表头中的 "设备MAC地址" 为 "设备MAC地址后4位"
-        headers = ["设备信息", "产品型号", "设备后4位", "操作位"] + filtered_loads
+        # 设置列数和表头（增加验收列）
+        self.table_widget.setColumnCount(5 + len(filtered_loads))  # 原4列+负载列+验收列
+        headers = ["设备信息", "产品型号", "设备后4位", "操作位"] + filtered_loads + ["工厂验收列"]  # 新增验收列
         self.table_widget.setHorizontalHeaderLabels(headers)
 
         total_rows = 0
@@ -929,8 +935,10 @@ class PanelPreDebugTool(PyQt5.QtWidgets.QMainWindow):
                         self.table_widget.setCellWidget(row, 2, None)
 
     def on_cell_clicked(self, row, column):
-        # 只处理负载列（从第4列开始）且排除下拉选项行
-        if column >= 4 and row != 1:
+        # 处理负载列（从第4列开始）或验收列（最后一列）
+        if (column >= 4 and column < self.table_widget.columnCount() - 1) or column == self.table_widget.columnCount() - 1:
+            if row == 1:  # 跳过下拉选项行
+                return
             item = self.table_widget.item(row, column)
             if item:
                 text = item.text()
