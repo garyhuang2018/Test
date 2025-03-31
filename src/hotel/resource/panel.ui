@@ -33,6 +33,9 @@
           <height>531</height>
          </rect>
         </property>
+        <property name="currentIndex">
+         <number>0</number>
+        </property>
         <widget class="QWidget" name="page_1">
          <layout class="QVBoxLayout" name="verticalLayout_1">
           <item>
@@ -59,7 +62,7 @@
           <item>
            <widget class="QLabel" name="label_2">
             <property name="text">
-             <string>选择自动化配置工具</string>
+             <string>批量配置</string>
             </property>
            </widget>
           </item>
@@ -67,6 +70,9 @@
         </widget>
         <widget class="QWidget" name="page_3">
          <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <widget class="QListWidget" name="listWidget"/>
+          </item>
           <item>
            <widget class="QLabel" name="label_3">
             <property name="text">
@@ -105,37 +111,19 @@
         </item>
         <item>
          <property name="text">
-          <string>选择并准备自动化配置工具</string>
+          <string>单房间设置</string>
          </property>
         </item>
         <item>
          <property name="text">
-          <string>工具初始化与设备连接</string>
+          <string>批量调试</string>
          </property>
         </item>
        </widget>
       </widget>
-
      </widget>
     </item>
    </layout>
-  </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>1236</width>
-     <height>23</height>
-    </rect>
-   </property>
-   <widget class="QMenu" name="menuFile">
-    <property name="title">
-     <string>&amp;文件</string>
-    </property>
-    <addaction name="actionExit"/>
-   </widget>
-   <addaction name="menuFile"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionExit">

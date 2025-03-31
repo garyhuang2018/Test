@@ -13,7 +13,7 @@ import sys
 import serial
 import serial.tools.list_ports
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton, QComboBox, \
-    QFileDialog, QLabel, QDialog, QMenu, QLineEdit, QListWidget, QTableWidgetItem
+    QFileDialog, QLabel, QDialog, QMenu, QLineEdit, QListWidget, QMessageBox
 from PyQt5.QtCore import QThread, pyqtSignal
 import datetime
 from openpyxl import Workbook
@@ -230,6 +230,7 @@ class SerialPortTab(QWidget):
                 mac_address = ':'.join([match[i:i + 2] for i in range(0, len(match), 2)])
                 mac_set.add(mac_address)  # 将 MAC 地址添加到集合中
 
+
         mac_list = list(mac_set)  # 将集合转换为列表
         return mac_list
 
@@ -247,6 +248,9 @@ class SerialPortTab(QWidget):
     def export_mac_list_to_file(self):
         """将 filter_device_ids 方法获取的列表输出到固定文件名的文本文档"""
         mac_list = self.filter_device_ids()
+        if not mac_list:
+            print("[WARNING] MAC地址列表为空，未保存文件")
+            return
         try:
             with open(self.mac_list_file, 'w') as file:
                 for mac in mac_list:
@@ -289,25 +293,70 @@ class SerialPortTab(QWidget):
         PyQt5.QtWidgets.QMessageBox.critical(None, "Error", f"An error occurred: {error_msg}")
 
     def export_to_excel(self):
-        self.stop_serial()  # 新增：停止串口数据接收
-        """导出接收数据和设备ID列表到Excel"""
+        # 同步线程缓冲区数据
+        if self.thread and hasattr(self.thread, 'buffer'):
+            buffer_lines = [line for line in self.thread.buffer.split('\n') if line]
+            self.received_data = list(set(self.received_data + buffer_lines))
+
+        # 空数据检查
         if not self.received_data:
-            self.status_updated.emit("没有数据可导出。")
+            print("没有数据可导出。")
+            QMessageBox.warning(self, "警告", "未找到任何接收数据")
             return
-        # # 创建设备ID表（如果存在）
-        # device_ids = self.filter_device_ids()
-        # if device_ids:
-        #     print(device_ids)
+
+        # 导出MAC地址列表
         self.export_mac_list_to_file()
+
+        # 创建Excel工作簿
         workbook = Workbook()
         sheet = workbook.active
         sheet.append(["Timestamp", "Data"])
+
+        # 填充数据（跳过无效行）
         for line in self.received_data:
-            timestamp, data = line.split(" - ", 1)
-            sheet.append([timestamp, data])
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx)")
-        if file_path:
+            if " - " not in line:
+                print(f"[WARNING] 忽略无效数据行: {line}")
+                continue
+            try:
+                timestamp, data = line.split(" - ", 1)
+                sheet.append([timestamp, data])
+            except Exception as e:
+                print(f"[ERROR] 解析数据失败: {e}")
+                continue
+
+        # 获取保存路径
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "保存Excel文件",
+            "",
+            "Excel文件 (*.xlsx)"
+        )
+
+        # 用户取消保存
+        if not file_path:
+            return
+
+        # 尝试保存文件
+        try:
             workbook.save(file_path)
+            PyQt5.QtWidgets.QMessageBox.information(
+                self,
+                "导出成功",
+                f"数据已保存至:\n{file_path}"
+            )
+        except PermissionError:
+            PyQt5.QtWidgets.QMessageBox.critical(
+                self,
+                "权限错误",
+                "无法写入文件，请检查:\n1. 文件是否被其他程序打开\n2. 是否有写入权限"
+            )
+        except Exception as e:
+            PyQt5.QtWidgets.QMessageBox.critical(
+                self,
+                "保存失败",
+                f"保存文件时发生错误:\n{str(e)}"
+            )
+        self.stop_serial()
 
     def clear_output(self):
         self.text_edit.clear()
