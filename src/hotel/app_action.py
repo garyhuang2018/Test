@@ -16,6 +16,10 @@ class App:
         except Exception:
             self.device_available = False
 
+    def config_panel_keys(self, key_num, text):
+        self.click_element_if_resource_exists(f"com.gemvary.vhpsmarthome:id/tv_key{key_num}")
+        self.device(resourceId="android:id/text1", text=text).click()
+
     def get_text_from_resource_id(self, resourceId):
         # 根据 resourceId 获取元素
         element = self.device(resourceId=resourceId)
@@ -619,7 +623,7 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-
+    d.config_panel_keys(5, "场景")
 
     # 定义回调函数（处理日志的逻辑）
 
