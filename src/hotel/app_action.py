@@ -20,6 +20,7 @@ class App:
         self.click_element_if_resource_exists(f"com.gemvary.vhpsmarthome:id/tv_key{key_num}")
         self.device(resourceId="android:id/text1", text=text).click()
 
+
     def get_text_from_resource_id(self, resourceId):
         # 根据 resourceId 获取元素
         element = self.device(resourceId=resourceId)
@@ -234,6 +235,19 @@ class App:
                 time.sleep(0.1)
             print(f"等待 5 秒后，未找到文本为 {text} 的可点击元素")
 
+    def click_text_if_text_exists_by_index(self, text, index):
+        if self.device_available:
+            start_time = time.time()
+            while time.time() - start_time < 5:
+                elements = self.device(text=text)
+                if elements.exists:
+                    first_element = elements[index]
+                    first_element.click()
+                    time.sleep(1)
+                    return
+                time.sleep(0.1)
+            print(f"等待 5 秒后，未找到文本为 {text} 的可点击元素")
+
     def click_element_if_texts_exists(self, text):
         if self.device_available:
             # 检查元素是否存在
@@ -285,6 +299,31 @@ class App:
         else:
             print("未找到目标文本元素")
 
+    def get_device_index_by_name(self, device_name):
+        """根据设备名称查找对应的索引"""
+        target_text = "定位"
+        text_list = []
+        target_element = self.device(text=target_text)
+
+        if target_element.exists:
+            target_xpath = f'//*[@text="{target_text}"]'
+            parent_xpath = f'{target_xpath}/..'
+            other_text_elements_xpath = f'{parent_xpath}//*[@text!=""]'
+            other_text_elements = self.device.xpath(other_text_elements_xpath).all()
+
+            for element in other_text_elements:
+                if element.text != target_text and "-" in element.text:
+                    text_list.append(element.text)
+
+            try:
+                index = text_list.index(device_name)
+                return index
+            except ValueError:
+                print(f"设备名称 '{device_name}' 不存在")
+                return -1
+        else:
+            print("未找到目标文本元素")
+            return -1
     #
     # def swipe_up(self):
     #     # 滑动操作示例
@@ -623,21 +662,26 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-    d.config_panel_keys(5, "场景")
-
-    # 定义回调函数（处理日志的逻辑）
-
-    def log_callback(logs):
-        # 在这里处理实时获取的日志
-        for log in logs:
-            print(f"实时日志: {log}")
-            # 示例：检测特定关键词
-            if "deviceName" in log:
-                print("发现设备名称信息")
-
-
-    # 启动实时监听（间隔1秒）
-    try:
-        d.monitor_logs(log_callback, interval=1)
-    except KeyboardInterrupt:
-        print("\n停止监听")
+    index = d.get_device_index_by_name("超级设备-A8A")
+    if index != -1:
+        print(f"设备索引: {index}")
+    d.click_text_if_text_exists_by_index("加入", index)
+    # d.locate_device_according_to_device_name(1)
+    # d.config_panel_keys(5, "场景")
+    #
+    # # 定义回调函数（处理日志的逻辑）
+    #
+    # def log_callback(logs):
+    #     # 在这里处理实时获取的日志
+    #     for log in logs:
+    #         print(f"实时日志: {log}")
+    #         # 示例：检测特定关键词
+    #         if "deviceName" in log:
+    #             print("发现设备名称信息")
+    #
+    #
+    # # 启动实时监听（间隔1秒）
+    # try:
+    #     d.monitor_logs(log_callback, interval=1)
+    # except KeyboardInterrupt:
+    #     print("\n停止监听")

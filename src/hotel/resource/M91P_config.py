@@ -14,11 +14,13 @@ class LogMonitorThread(QThread):
     new_data = pyqtSignal(list)
 
     def __init__(self, app_instance):
+        print('init log thread')
         super().__init__()
         self.d = app_instance
         self.running = True
 
     def run(self):
+        print("running log thread")
         while self.running:
             device_info_list = self.d.get_device_info()  # 假设App类有该方法
             if device_info_list:
@@ -27,6 +29,7 @@ class LogMonitorThread(QThread):
 
     def stop(self):
         self.running = False
+
 
 class DraggableLabel(QLabel):
     def __init__(self, text, color, parent=None):
@@ -70,9 +73,11 @@ class ButtonWithHighlight(QPushButton):
             "窗帘": "blue"
         }
         if source_label_text in color_map:
+            # 更新文本和颜色
+            self.setText(source_label_text)  # 新增此行
             self.setStyleSheet(f'background-color: {color_map[source_label_text]}; font-size: 16px;')
         else:
-            # 如果是从设备列表拖过来的，改变按钮文本
+            # 设备列表拖拽逻辑
             self.setText(source_label_text)
             self.setStyleSheet('background-color: yellow; font-size: 16px;')
 
@@ -131,9 +136,9 @@ class MainWindow(QMainWindow):
         self.buttons = {
             "K1": ButtonWithHighlight("K1"),
             "K2": ButtonWithHighlight("K2"),
-            "K3": ButtonWithHighlight("K5"),
-            "K4": ButtonWithHighlight("K3"),
-            "K5": ButtonWithHighlight("K4"),
+            "K5": ButtonWithHighlight("K5"),
+            "K3": ButtonWithHighlight("K3"),
+            "K4": ButtonWithHighlight("K4"),
             "K6": ButtonWithHighlight("K6")
         }
 
@@ -160,8 +165,11 @@ class MainWindow(QMainWindow):
         # 新增设备监控相关组件
         self.device_combo = QComboBox()
         self.log_monitor_thread = None
+        self.search_device_btn = QPushButton('第二步：搜索设备')
+        # 为按钮添加点击事件处理函数（这里暂时为空，你可以根据需求实现具体逻辑）
+        self.search_device_btn.clicked.connect(self.on_search_device_click)
         # 添加面板按键配置按钮
-        self.config_button_keys = QPushButton("面板按键配置")
+        self.config_button_keys = QPushButton("第三步：面板按键配置")
         self.config_button_keys.clicked.connect(self.config_panel_keys)
         # 修改配置面板布局
         self.config_panel = QWidget()
@@ -169,6 +177,7 @@ class MainWindow(QMainWindow):
         self.config_label = QLabel("设备监控列表")
         config_layout.addWidget(self.config_label)
         config_layout.addWidget(self.device_combo)  # 添加下拉列表
+        config_layout.addWidget(self.search_device_btn)
         config_layout.addWidget(self.config_button_keys)  # 添加下拉列表
         self.config_panel.setLayout(config_layout)
 
@@ -176,14 +185,48 @@ class MainWindow(QMainWindow):
         self.config_panel.setFixedSize(200, 200)
 
         main_layout.addWidget(self.config_panel)
+        self.config_panel.hide()
 
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
         self.dropped_texts = []  # 用于记录被拖入按钮的文本
 
+    # 新增：搜索设备按钮点击事件处理函数
+    def on_search_device_click(self):
+        # 新增：在开始搜索前重置设备信息
+        d.add_light_switchs()
+        QMessageBox.information(self, "提示", "请将设备断电、上电")
+
     def config_panel_keys(self):
-        print("config")
+        # 获取当前设备名称
+        selected_device = self.device_combo.currentText()
+        print(selected_device)
+        if not selected_device:
+            QMessageBox.warning(self, "警告", "请先选择设备")
+            return
+        index = d.get_device_index_by_name(selected_device)
+        d.click_text_if_text_exists_by_index("加入", index)
+        d.click_first_element_if_text_exists("GP系列")
+        d.click_first_element_if_text_exists("统一面板")
+        # d.click_first_element_if_text_exists("下一步")
+        # 获取当前所有按钮的文本状态
+        buttons_state = self.get_current_buttons_state()
+
+        # 遍历每个按钮并调用设备操作方法
+        for btn_name, state in buttons_state.items():
+            # 从按钮名称提取键号（例如K1 -> 1）
+            key_num = int(btn_name[1:])  # 去掉首字母K后转数字
+            button_text = state["text"]
+
+            # 调用设备操作（需确保d是App实例）
+            if hasattr(d, "config_panel_keys"):
+                d.config_panel_keys(key_num, button_text)
+                print(f"已配置按键{btn_name}: 键号={key_num}, 文本={button_text}")
+        d.click_first_element_if_text_exists("确定")
+        d.click_first_element_if_text_exists("下一步")
+        d.click_first_element_if_text_exists("添加")
+        d.click_first_element_if_text_exists("完成")
 
     def load_configs(self):
         try:
@@ -305,6 +348,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "警告", "请输入区域和设备名称")
 
     def search_device(self):
+        self.start_device_monitoring()
         area = self.input_area.text()
         device = self.input_device.text()
         if area and device:
@@ -335,6 +379,7 @@ class MainWindow(QMainWindow):
 
     # 新增设备监控方法
     def start_device_monitoring(self):
+        print('start device monitoring')
         if self.log_monitor_thread is not None:
             self.log_monitor_thread.stop()
 
@@ -366,9 +411,9 @@ def classify_panel(strings):
     curtain_count = 0
 
     for string in strings:
-        if string.endswith("灯") or string == "总控":
+        if string.endswith("灯") or string == "总控" or string == "开关":
             switch_count += 1
-        elif string.endswith("模式"):
+        elif string.endswith("模式") or string == "场景":
             scene_count += 1
         elif "窗帘" in string:
             curtain_count = 1  # 只要有窗帘相关操作，就认为是一个窗帘
