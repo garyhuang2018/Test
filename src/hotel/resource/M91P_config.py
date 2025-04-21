@@ -124,13 +124,7 @@ class MainWindow(QMainWindow):
         config_management_layout.addWidget(self.save_config_btn)
         config_management_layout.addWidget(self.delete_config_btn)
         left_right_layout.addLayout(config_management_layout)
-        # 确保配置文件存在
-        if not os.path.exists('configs.json'):
-            with open('configs.json', 'w', encoding='utf-8') as f:
-                json.dump({}, f)
-        # 加载配置文件
-        self.configs = self.load_configs()
-        self.update_config_combo()
+
         # 创建按钮并按照指定布局排列
         button_grid_layout = QGridLayout()
         self.buttons = {
@@ -150,7 +144,13 @@ class MainWindow(QMainWindow):
             button_grid_layout.addWidget(button, *position)
 
         left_right_layout.addLayout(button_grid_layout)
-
+        # 确保配置文件存在
+        if not os.path.exists('configs.json'):
+            with open('configs.json', 'w', encoding='utf-8') as f:
+                json.dump({}, f)
+        # 加载配置文件
+        self.configs = self.load_configs()
+        self.update_config_combo()
         # 添加用于显示分类信息的标签
         self.classify_label = QLabel("暂无分类信息")
         left_right_layout.addWidget(self.classify_label)
