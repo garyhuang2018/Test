@@ -37,6 +37,11 @@ class RedLightDetector(QMainWindow):
         self.detection_timer.timeout.connect(self.check_brightness)
         self.selected_point_index = None  # 用于跟踪当前选中的测试点
 
+        # 添加以下两个变量
+        self.loop_playback = False
+        self.playback_index = 0
+        self.initUI()
+
         # 白灯检测相关变量
         self.white_detection_active = False
         self.green_boxes = []  # 存储多个绿框坐标
@@ -70,17 +75,25 @@ class RedLightDetector(QMainWindow):
         nav_label = QLabel("导航")
         nav_panel.addWidget(nav_label)
 
+        # 在initUI中修改按钮连接
         nav_button1 = QPushButton("自动语音播报测试")
+        nav_button1.clicked.connect(self.automatic_playback)  # 添加这行
         nav_panel.addWidget(nav_button1)
+
 
         # 音频文件列表
         self.audio_list = QListWidget()
-        self.audio_list.addItem("小度小度打开射灯.mp3")  # 默认音频文件
-        self.audio_list.itemClicked.connect(self.play_audio)
+        # self.audio_list.addItem("小度小度打开射灯.mp3")  # 默认音频文件
+        self.audio_list.addItem("小度开灯.mp3")  # 默认音频文件
+        self.audio_list.addItem("小度关灯.mp3")  # 默认音频文件
+        # 修改音频列表连接方式
+        self.audio_list.itemClicked.connect(self.play_audio)  # 直接传递item
         nav_panel.addWidget(self.audio_list)
 
         nav_button2 = QPushButton("按钮2")
         nav_panel.addWidget(nav_button2)
+
+
 
         # 中间内容布局
         content_layout = QVBoxLayout()
@@ -126,6 +139,10 @@ class RedLightDetector(QMainWindow):
         self.captured_image_label = QLabel()
         right_panel.addWidget(self.captured_image_label)
 
+        # 在右侧面板添加循环播放按钮
+        self.loop_button = QPushButton("循环播放：关闭")
+        self.loop_button.clicked.connect(self.toggle_loop_playback)
+        right_panel.addWidget(self.loop_button)
         # 白灯检测按钮
         self.detect_white_button = QPushButton("开始检测白灯")
         self.detect_white_button.setCheckable(True)
@@ -170,11 +187,51 @@ class RedLightDetector(QMainWindow):
         else:
             self.status_label.setText("状态：请先绘制绿框")
 
-    def play_audio(self):
-        audio_file_path = "小度小度打开射灯.mp3"
-        self.audio_thread = AudioThread(audio_file_path)
-        self.audio_thread.finished.connect(self.audio_thread.on_audio_finished)
-        self.audio_thread.start()
+    # 修改play_audio方法
+    def play_audio(self, item):
+        try:
+            audio_file = item.text()
+            self.audio_thread = AudioThread(audio_file)
+            self.audio_thread.finished.connect(self.audio_thread.on_audio_finished)
+            self.audio_thread.start()
+        except Exception as e:
+            print(f"播放音频出错：{str(e)}")
+
+    # 新增循环播放切换方法
+    def toggle_loop_playback(self):
+        self.loop_playback = not self.loop_playback
+        state = "开启" if self.loop_playback else "关闭"
+        self.loop_button.setText(f"循环播放：{state}")
+        self.status_label.setText(f"循环播放模式已{state}")
+
+    # 修改自动播放方法
+    def automatic_playback(self):
+        if not hasattr(self, 'playback_items') or not self.playback_items:
+            self.playback_items = [self.audio_list.item(i).text() for i in range(self.audio_list.count())]
+        self.playback_index = 0
+        self.play_next_audio()
+
+    # 修改播放下一个音频的逻辑
+    def play_next_audio(self):
+        if self.playback_index < len(self.playback_items):
+            audio_file = self.playback_items[self.playback_index]
+            self.audio_thread = AudioThread(audio_file)
+            self.audio_thread.finished.connect(self.handle_playback_finished)
+            self.audio_thread.start()
+            status_text = f"正在播放：{audio_file} (循环模式已{'开启' if self.loop_playback else '关闭'})"
+            self.status_label.setText(status_text)
+            self.playback_index += 1
+        elif self.loop_playback:  # 循环模式下重新开始
+            self.playback_index = 0
+            self.play_next_audio()
+        else:
+            self.status_label.setText("自动播放完成")
+
+    # 修改播放完成处理方法
+    def handle_playback_finished(self):
+        if self.loop_playback and self.playback_index >= len(self.playback_items):
+            self.playback_index = 0  # 重置索引实现循环
+        QTimer.singleShot(5500, self.play_next_audio)
 
     def mousePressEvent(self, event):
         if self.detecting or (self.white_detection_active and self.detect_white_button.isChecked()):
