@@ -6,7 +6,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QInputDialog, \
-    QFileDialog, QListWidget, QHBoxLayout, QSlider
+    QFileDialog, QListWidget, QHBoxLayout, QSlider, QTextEdit, QGroupBox
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont
 from PIL import Image, ImageDraw, ImageFont
@@ -58,6 +58,25 @@ class RedLightDetector(QMainWindow):
         self.setFocusPolicy(Qt.StrongFocus)
         self.threshold = 1.0  # 初始化阈值为1.0，改为浮点数
 
+        # 在__init__中新增变量
+        self.confirmation_frames = 3  # 需连续3帧检测到变化
+        self.detection_counters = [0] * self.max_points  # 每个测试点的计数器
+        # 动态ROI大小（需与界面滑块联动）
+        self.roi_size = 10  # 默认检测区域半径
+
+
+        # 新增调试相关变量
+        self.red_ratio_threshold = 0.2  # 默认20%
+        self.brightness_factor = 2.0  # 默认2σ
+        self.show_debug = True  # 默认显示调试信息
+        self.frame_count = 0
+
+        # 红色范围调节（可在界面扩展）
+        self.lower_red = np.array([0, 100, 100])
+        self.upper_red = np.array([10, 255, 255])
+        self.lower_red2 = np.array([160, 100, 100])
+        self.upper_red2 = np.array([180, 255, 255])
+
     def initUI(self):
         self.setWindowTitle('酒店一页纸模板测试')
         self.setGeometry(100, 100, 1000, 600)  # 调整窗口宽度以容纳新面板
@@ -75,6 +94,49 @@ class RedLightDetector(QMainWindow):
         nav_label = QLabel("导航")
         nav_panel.addWidget(nav_label)
 
+        # 右侧面板新增内容
+        right_panel = QVBoxLayout()
+
+        # 灵敏度控制组
+        sensitivity_group = QGroupBox("灵敏度调节")
+        sensitivity_layout = QVBoxLayout()
+
+        # 在界面添加滑块控制
+        self.roi_slider = QSlider(Qt.Horizontal)
+        self.roi_slider.setRange(5, 30)  # 半径范围5-30像素
+        self.roi_slider.valueChanged.connect(self.update_roi_size)
+
+        # 红色灵敏度调节
+        self.red_threshold_label = QLabel("红色像素占比阈值: 20%")
+        self.red_threshold_slider = QSlider(Qt.Horizontal)
+        self.red_threshold_slider.setRange(5, 50)  # 5%到50%
+        self.red_threshold_slider.setValue(20)
+        self.red_threshold_slider.valueChanged.connect(self.update_red_threshold)
+
+        # 亮度灵敏度调节
+        self.brightness_factor_label = QLabel("亮度阈值系数: 2.0σ")
+        self.brightness_factor_slider = QSlider(Qt.Horizontal)
+        self.brightness_factor_slider.setRange(1, 500)
+        self.brightness_factor_slider.setValue(20)
+        self.brightness_factor_slider.valueChanged.connect(self.update_brightness_factor)
+        sensitivity_layout.addWidget(QLabel("半径："))
+        sensitivity_layout.addWidget(self.roi_slider)
+        sensitivity_layout.addWidget(QLabel("红色灵敏度："))
+        sensitivity_layout.addWidget(self.red_threshold_label)
+        sensitivity_layout.addWidget(self.red_threshold_slider)
+        sensitivity_layout.addWidget(QLabel("亮度灵敏度："))
+        sensitivity_layout.addWidget(self.brightness_factor_label)
+        sensitivity_layout.addWidget(self.brightness_factor_slider)
+        sensitivity_group.setLayout(sensitivity_layout)
+        right_panel.addWidget(sensitivity_group)
+
+        # 调试信息显示
+        self.debug_text = QTextEdit()
+        self.debug_text.setReadOnly(True)
+        self.debug_text.setMaximumHeight(200)
+        right_panel.addWidget(QLabel("调试信息："))
+        right_panel.addWidget(self.debug_text)
+        layout.addLayout(right_panel)
         # 在initUI中修改按钮连接
         nav_button1 = QPushButton("自动语音播报测试")
         nav_button1.clicked.connect(self.automatic_playback)  # 添加这行
@@ -92,8 +154,6 @@ class RedLightDetector(QMainWindow):
 
         nav_button2 = QPushButton("按钮2")
         nav_panel.addWidget(nav_button2)
-
-
 
         # 中间内容布局
         content_layout = QVBoxLayout()
@@ -158,6 +218,9 @@ class RedLightDetector(QMainWindow):
         self.threshold_slider.setValue(10)  # 初始值对应 1.0
         self.threshold_slider.valueChanged.connect(self.update_threshold)
         content_layout.addWidget(self.threshold_slider)
+
+    def update_roi_size(self, value):
+        self.roi_size = value
 
     def update_threshold(self, value):
         self.threshold = value / 10.0  # 将滑块值转换为精确到 0.1 的阈值
@@ -351,6 +414,19 @@ class RedLightDetector(QMainWindow):
         except Exception as e:
             print(f"更新帧时出错：{str(e)}")
 
+    def update_red_threshold(self, value):
+        self.red_ratio_threshold = value / 100.0
+        self.red_threshold_label.setText(f"红色像素占比阈值: {value}%")
+        self.debug_text.append(f"[参数更新] 红色阈值调整为 {value}%")
+
+    def update_brightness_factor(self, value):
+        self.brightness_factor = value / 100.0  # 范围1.0-3.0
+        # 新增自动重新校准↓↓↓
+        if self.detecting:  # 如果正在检测中则重新校准
+            self.start_detection()
+        self.brightness_factor_label.setText(f"亮度阈值系数: {self.brightness_factor:.1f}σ")
+        self.debug_text.append(f"[参数更新] 亮度系数调整为 {self.brightness_factor:.1f}σ")
+
     def start_detection(self):
         if self.light_points:
             self.detecting = True
@@ -358,44 +434,130 @@ class RedLightDetector(QMainWindow):
             self.start_button.setEnabled(False)
             print("开始检测红灯")
 
-            # 记录所有点的初始亮度
-            frame = self.cap.read()[1]
+            # 初始化动态阈值数据结构
             self.initial_brightness = []
-            for x, y in self.light_points:
-                roi = frame[y - 10:y + 10, x - 10:x + 10]
-                brightness = np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))
-                self.initial_brightness.append(brightness)
-                print(f"点 ({x}, {y}) 的初始亮度：{brightness}")
+            self.detection_counters = [0] * len(self.light_points)  # 多帧验证计数器
 
-            # 启动检测定时器，每秒检查一次
-            self.detection_timer.start(600)
+            try:
+                ret, frame = self.cap.read()
+                if not ret:
+                    self.status_label.setText("状态：无法获取视频帧")
+                    return
+
+                for x, y in self.light_points:
+                    # 确保坐标在有效范围内
+                    x = int(x)
+                    y = int(y)
+                    if (y - 10 < 0 or y + 10 > frame.shape[0] or
+                            x - 10 < 0 or x + 10 > frame.shape[1]):
+                        print(f"坐标 ({x}, {y}) 超出图像范围")
+                        self.initial_brightness.append({"mean": 0, "std": 0})
+                        continue
+
+                    # 获取ROI区域
+                    roi = frame[y - self.roi_size:y + self.roi_size,
+                          x - self.roi_size:x + self.roi_size]
+                    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+                    # 计算动态阈值参数
+                    brightness_mean = np.mean(gray)
+                    brightness_std = np.std(gray)
+
+                    self.initial_brightness.append({
+                        "mean": brightness_mean,
+                        "std": brightness_std
+                    })
+                    print(f"点 ({x}, {y}) 初始亮度：均值={brightness_mean:.1f}，标准差={brightness_std:.1f}")
+
+                # 启动检测定时器
+                self.detection_timer.start(600)
+                self.status_label.setText("状态：动态阈值初始化完成，开始检测")
+
+
+            except Exception as e:
+                print(f"初始亮度检测失败：{str(e)}")
+                self.initial_brightness = []
+                self.start_button.setEnabled(True)
 
     def check_brightness(self):
-        frame = self.cap.read()[1]
-        for i, (point, name, initial_bright) in enumerate(
-                zip(self.light_points, self.light_names, self.initial_brightness)):
-            x, y = point
-            roi = frame[y - 10:y + 10, x - 10:x + 10]
-            current_brightness = np.mean(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY))
 
-            brightness_change = current_brightness - initial_bright
-            print(f"{name} 当前亮度：{current_brightness}，亮度变化：{brightness_change}")
+        try:
+            ret, frame = self.cap.read()
+            if not ret:
+                return
 
-            if brightness_change > 3:
-                self.status_label.setText(f"状态：检测到 {name} 红灯亮起")
-                print(f"检测到 {name} 红灯亮起")
-                self.light_list.item(i).setText(f"{name}: ({x}, {y}) - 亮起")
+            debug_info = []  # 本帧调试信息
+            hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-                # 捕获图像并添加时间戳
-                timestamp = cv2.putText(frame.copy(),
-                                        f"Time: {cv2.getTickCount()}",
-                                        (10, frame.shape[0] - 10),
-                                        cv2.FONT_HERSHEY_SIMPLEX,
-                                        0.5,
-                                        (255, 255, 255),
-                                        1,
-                                        cv2.LINE_AA)
-                self.display_captured_image(timestamp)
+            for i, (point, name, initial_data) in enumerate(zip(
+                    self.light_points, self.light_names, self.initial_brightness)):
+
+                x, y = point
+                x, y = int(x), int(y)
+                roi_size = self.roi_size
+
+                # ROI有效性检查
+                if (y - roi_size < 0 or y + roi_size > frame.shape[0] or
+                        x - roi_size < 0 or x + roi_size > frame.shape[1]):
+                    debug_info.append(f"{name}: ROI越界")
+                    continue
+
+                # 提取ROI
+                roi_bgr = frame[y - roi_size:y + roi_size, x - roi_size:x + roi_size]
+                roi_hsv = hsv_frame[y - roi_size:y + roi_size, x - roi_size:x + roi_size]
+
+                # 亮度计算
+                gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
+                current_brightness = np.mean(gray)
+
+                # 动态阈值计算
+                mean = initial_data["mean"]
+                # 修改动态阈值计算逻辑
+                std = max(initial_data["std"], 1.0)  # 确保标准差至少为1.0
+                dynamic_threshold = initial_data["mean"] + self.brightness_factor * std
+
+                # 红色检测
+                mask1 = cv2.inRange(roi_hsv, self.lower_red, self.upper_red)
+                mask2 = cv2.inRange(roi_hsv, self.lower_red2, self.upper_red2)
+                red_mask = cv2.bitwise_or(mask1, mask2)
+                red_ratio = np.sum(red_mask > 0) / red_mask.size
+
+                # 检测条件
+                cond_bright = current_brightness > dynamic_threshold
+                cond_color = red_ratio >= self.red_ratio_threshold
+                debug_line = [
+                    f"{name}:",
+                    f"亮度={current_brightness:.1f}(阈={dynamic_threshold:.1f})",
+                    f"红色占比={red_ratio * 100:.1f}%",
+                    "| 触发" if cond_bright and cond_color else "| 未触发"
+                ]
+                debug_info.append(" ".join(debug_line))
+
+                # 双重检测条件
+                brightness_condition = current_brightness > dynamic_threshold
+                color_condition = red_ratio > 0.2  # 红色占比超过20%
+
+                if brightness_condition and color_condition:
+                    self.detection_counters[i] += 1
+                    if self.detection_counters[i] >= self.confirmation_frames:
+                        self.status_label.setText(f"状态：检测到 {name} 红灯亮起")
+                        self.light_list.item(i).setText(f"{name}: ({x}, {y}) - 亮起")
+                        self.capture_and_mark(frame.copy(), (
+                            x - self.roi_size, y - self.roi_size,
+                            x + self.roi_size, y + self.roi_size
+                        ))
+                        self.detection_counters[i] = 0  # 重置计数器
+                else:
+                    self.detection_counters[i] = max(0, self.detection_counters[i] - 1)
+            # 更新调试信息（每秒更新10次）
+            if self.frame_count % 3 == 0:  # 约每100ms更新一次
+                self.debug_text.clear()
+                self.debug_text.append("\n".join(debug_info))
+
+            self.frame_count += 1
+        except Exception as e:
+            print(f"亮度检测异常: {str(e)}")
+            self.status_label.setText("状态：检测过程中发生错误")
 
     def check_white_light(self):
         if not self.green_boxes:
