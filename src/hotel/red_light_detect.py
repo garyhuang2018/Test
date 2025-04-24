@@ -10,7 +10,6 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QPu
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QImage, QPixmap, QFont
 from PIL import Image, ImageDraw, ImageFont
-from playsound import playsound
 import sounddevice as sd
 import soundfile as sf
 from PyQt5.QtCore import QThread, pyqtSignal
@@ -23,6 +22,9 @@ class RedLightDetector(QMainWindow):
         self.initUI()
 
         self.cap = cv2.VideoCapture(0)
+        # 新增曝光控制↓↓↓
+        self.cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)  # 手动曝光模式
+        self.cap.set(cv2.CAP_PROP_EXPOSURE, -4)  # 具体值需根据摄像头调整
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(30)
@@ -116,8 +118,8 @@ class RedLightDetector(QMainWindow):
         # 亮度灵敏度调节
         self.brightness_factor_label = QLabel("亮度阈值系数: 2.0σ")
         self.brightness_factor_slider = QSlider(Qt.Horizontal)
-        self.brightness_factor_slider.setRange(1, 500)
-        self.brightness_factor_slider.setValue(20)
+        self.brightness_factor_slider.setRange(-2000, 10000)
+        self.brightness_factor_slider.setValue(200)
         self.brightness_factor_slider.valueChanged.connect(self.update_brightness_factor)
         sensitivity_layout.addWidget(QLabel("半径："))
         sensitivity_layout.addWidget(self.roi_slider)
@@ -420,7 +422,10 @@ class RedLightDetector(QMainWindow):
         self.debug_text.append(f"[参数更新] 红色阈值调整为 {value}%")
 
     def update_brightness_factor(self, value):
-        self.brightness_factor = value / 100.0  # 范围1.0-3.0
+        # 将滑块值转换为两位小数的系数（步长0.01σ）
+        self.brightness_factor = value / 1000.0  # 1 → 0.001σ，200 → 0.20σ
+        self.brightness_factor_label.setText(f"亮度阈值系数: {self.brightness_factor:.2f}σ")
+        self.debug_text.append(f"[参数更新] 亮度系数调整为 {self.brightness_factor:.2f}σ")
         # 新增自动重新校准↓↓↓
         if self.detecting:  # 如果正在检测中则重新校准
             self.start_detection()
