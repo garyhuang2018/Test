@@ -475,7 +475,7 @@ class App:
         self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/appCompatImageView6")
         self.click_back_icon()
 
-    def swipe_and_click_if_text_exists(self, target_text, steps=10):
+    def swipe_and_click_if_text_exists(self, target_text, steps=16):
         try:
             # 获取屏幕尺寸
             width, height = self.device.window_size()
@@ -485,7 +485,7 @@ class App:
             middle_y = height // 2
 
             # 增大每次下滑的距离，这里设置为屏幕高度的 0.2
-            step_distance = height * 0.1
+            step_distance = height * 0.15
 
             for _ in range(steps):
                 # 定义滑动的起始点和结束点
@@ -572,7 +572,7 @@ class App:
         end_y = height * 0.2
         self.device.swipe(start_x, start_y, start_x, end_y)
 
-    def swipe_and_click_text(self, target_text, max_swipes=4, swipe_interval=1):
+    def swipe_and_click_text(self, target_text, max_swipes=4, swipe_interval=0.5):
         """
         一边下滑屏幕一边匹配文本，找到匹配文本后点击
         :param target_text: 要匹配的文本

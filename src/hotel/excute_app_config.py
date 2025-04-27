@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit,
     QPushButton, QVBoxLayout, QGridLayout, QMessageBox,
     QTabWidget, QTextEdit, QTableWidget, QTableWidgetItem,
-    QComboBox
+    QComboBox, QHBoxLayout
 )
 
 from app_action import App
@@ -78,6 +78,7 @@ class ApplyTemplateWindow(QWidget):
         self.log_monitor_thread = None
         self.applied_devices = []
         self.selected_device = None
+        self.all_devices = set()  # 新增
 
     def load_config(self):
         if self.config_path.exists():
@@ -189,6 +190,50 @@ class ApplyTemplateWindow(QWidget):
         tab_widget.addTab(input_tab, '操作输入')
         tab_widget.addTab(self.record_tab, '操作记录')
 
+        # 创建来料检测标签页
+        inspection_tab = QWidget()
+        inspection_layout = QVBoxLayout()
+
+        # 步骤1：自动化添加设备
+        step1_layout = QHBoxLayout()
+        self.auto_add_btn = QPushButton("1. 自动化添加设备")
+        self.auto_add_btn.clicked.connect(self.on_auto_add_devices)
+        step1_layout.addWidget(self.auto_add_btn)
+        step1_layout.addWidget(QLabel("→"))  # 右箭头
+        inspection_layout.addLayout(step1_layout)
+
+        # 步骤2：手动设备断电上电
+        step2_layout = QHBoxLayout()
+        self.manual_power_label = QLabel("2. 请手动执行设备断电上电操作")
+        step2_layout.addWidget(self.manual_power_label)
+        step2_layout.addWidget(QLabel("→"))  # 右箭头
+        inspection_layout.addLayout(step2_layout)
+
+        # 步骤3：关联配测设备
+        step3_layout = QHBoxLayout()
+        self.bind_device_btn = QPushButton("3. 关联配测设备")
+        self.bind_device_btn.clicked.connect(self.on_bind_test_device)
+        step3_layout.addWidget(self.bind_device_btn)
+        step3_layout.addWidget(QLabel("→"))  # 右箭头
+        inspection_layout.addLayout(step3_layout)
+
+        # 步骤4：手动刷卡
+        step4_layout = QHBoxLayout()
+        self.swipe_card_label = QLabel("4. 请使用物理卡片靠近设备刷卡")
+        step4_layout.addWidget(self.swipe_card_label)
+        inspection_layout.addLayout(step4_layout)
+
+        # 状态显示
+        self.inspection_status = QTextEdit()
+        self.inspection_status.setReadOnly(True)
+        inspection_layout.addWidget(QLabel("检测进度："))
+        inspection_layout.addWidget(self.inspection_status)
+
+        inspection_tab.setLayout(inspection_layout)
+
+        # 将新标签页添加到 QTabWidget（找到原有tab_widget添加位置）
+        tab_widget.addTab(inspection_tab, '来料检测')
+
         main_layout = QVBoxLayout()
         main_layout.addWidget(tab_widget)
         self.setLayout(main_layout)
@@ -236,13 +281,16 @@ class ApplyTemplateWindow(QWidget):
         if "已成功应用模板" in message:
             device_names = self.d.get_device_names()
             self.applied_devices = device_names
-            # 清空表格
-            self.device_table.setRowCount(0)
-            max_length = max(len(self.applied_devices), 0)
-            self.device_table.setRowCount(max_length)
-            for i, name in enumerate(self.applied_devices):
-                item = QTableWidgetItem(name)
-                self.device_table.setItem(i, 0, item)
+            self.device_table.setRowCount(len(device_names))  # 固定行数
+            for i, name in enumerate(device_names):
+                # 初始化第一列
+                self.device_table.setItem(i, 0, QTableWidgetItem(name))
+                # 初始化第二列为空的下拉框
+                combo = QComboBox()
+                combo.addItems(sorted(self.all_devices))
+                combo.currentIndexChanged.connect(
+                    lambda idx, r=i: self.fix_selection(r, combo.itemText(idx)))
+                self.device_table.setCellWidget(i, 1, combo)
 
     def show_error_message(self, message):
         QMessageBox.critical(self, "执行错误", message)
@@ -250,7 +298,9 @@ class ApplyTemplateWindow(QWidget):
 
     # 新增：搜索设备按钮点击事件处理函数
     def on_search_device_click(self):
+        # 新增：在开始搜索前重置设备信息
         self.d.add_light_switchs()
+
         if self.log_monitor_thread is not None:
             self.log_monitor_thread.stop()
         self.log_monitor_thread = LogMonitorThread(self.d)
@@ -258,25 +308,37 @@ class ApplyTemplateWindow(QWidget):
         self.log_monitor_thread.start()
         QMessageBox.information(self, "提示", "请将设备断电、上电")
 
-    # 新增：更新设备表格的方法
     def update_device_table(self, device_info_list):
-        print("update", device_info_list)
-        device_names = [info.get('deviceName', '未知设备') for info in device_info_list]
-        # 清空表格
-        self.device_table.setRowCount(0)
-        max_length = max(len(self.applied_devices), len(device_names))
-        self.device_table.setRowCount(max_length)
-        for i, name in enumerate(self.applied_devices):
-            item = QTableWidgetItem(name)
-            self.device_table.setItem(i, 0, item)
+        print(f"[DEBUG] Received devices: {device_info_list}")
 
-        for i in range(self.device_table.rowCount()):
-            combo_box = QComboBox()
-            for name in device_names:
-                combo_box.addItem(name)
-            combo_box.currentIndexChanged.connect(
-                lambda index, row=i: self.fix_selection(row, combo_box.itemText(index)))
-            self.device_table.setCellWidget(i, 1, combo_box)
+        # 提取设备名称时增加空值过滤
+        new_devices = set()
+        for info in device_info_list:
+            device_name = info.get('deviceName')
+            if device_name and isinstance(device_name, str):  # 确保名称是字符串
+                new_devices.add(device_name.strip())  # 去除前后空格
+
+        print(f"[DEBUG] Extracted new devices: {new_devices}")
+
+        # 合并到全量设备集合
+        self.all_devices.update(new_devices)
+        print(f"[DEBUG] All devices after update: {self.all_devices}")
+
+        # 强制更新所有行的下拉选项
+        for row in range(self.device_table.rowCount()):
+            combo = self.device_table.cellWidget(row, 1)
+            if combo:
+                current_text = combo.currentText()
+                combo.blockSignals(True)  # 防止触发信号
+                combo.clear()
+                combo.addItems(sorted(self.all_devices))
+                if current_text in self.all_devices:
+                    combo.setCurrentText(current_text)
+                else:
+                    combo.setCurrentIndex(-1)
+                combo.blockSignals(False)  # 恢复信号
+
+        self.device_table.viewport().update()  # 强制刷新界面
 
     def fix_selection(self, row, selected_device):
         item = QTableWidgetItem(selected_device)
@@ -287,6 +349,23 @@ class ApplyTemplateWindow(QWidget):
         self.d.single_controller_on_off()
         # 这里可以实现通断电开关的具体逻辑
         # QMessageBox.information(self, "提示", "通断电开关功能待实现")
+
+    # 在 ApplyTemplateWindow 类中添加新的方法
+    def on_auto_add_devices(self):
+        try:
+            self.d.add_light_switchs()  # 假设App类有对应方法
+            self.inspection_status.append("自动化添加设备完成")
+            QMessageBox.information(self, "成功", "设备自动添加完成")
+        except Exception as e:
+            self.show_error_message(f"自动添加设备失败: {str(e)}")
+
+    def on_bind_test_device(self):
+        try:
+            self.d.bind_test_device()  # 假设App类有对应方法
+            self.inspection_status.append("配测设备关联成功")
+            QMessageBox.information(self, "成功", "设备关联完成")
+        except Exception as e:
+            self.show_error_message(f"设备关联失败: {str(e)}")
 
 
 if __name__ == '__main__':
