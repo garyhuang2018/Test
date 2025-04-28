@@ -361,6 +361,7 @@ class ApplyTemplateWindow(QWidget):
         # 执行替换操作
         try:
             for original_name, new_name in replace_pairs:
+                print('replace pair', replace_pairs.__len__())
                 # 假设 App 类有 replace_device 方法
                 self.d.replace_device(original_name, new_name)
 
@@ -448,9 +449,8 @@ class ApplyTemplateWindow(QWidget):
         self.log_monitor_thread.start()
         QMessageBox.information(self, "提示", "请将设备断电、上电")
 
-
     def update_device_table(self, device_info_list):
-        print(f"[DEBUG] Received devices: {device_info_list}")
+        # print(f"[DEBUG] Received devices: {device_info_list}")
 
         # 提取设备名称时增加空值过滤
         new_devices = set()
@@ -459,12 +459,10 @@ class ApplyTemplateWindow(QWidget):
             if device_name and isinstance(device_name, str):  # 确保名称是字符串
                 new_devices.add(device_name.strip())  # 去除前后空格
 
-        print(f"[DEBUG] Extracted new devices: {new_devices}")
-
+        # print(f"[DEBUG] Extracted new devices: {new_devices}")
         # 合并到全量设备集合
         self.all_devices.update(new_devices)
-        print(f"[DEBUG] All devices after update: {self.all_devices}")
-
+        # print(f"[DEBUG] All devices after update: {self.all_devices}")
         # 安全更新下拉框内容
         row_count = self.device_table.rowCount()
         for row in range(row_count):
