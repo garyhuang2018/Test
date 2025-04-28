@@ -519,6 +519,18 @@ class App:
         self.click_element_if_texts_exists("确定")
         self.click_back_icon()
 
+    def replace_device(self, original_name, new_name):
+        self.click_first_element_if_text_exists("停止搜索")
+        print('replace, device', original_name, new_name)
+        index = self.get_device_index_by_name(new_name)
+        print(index)
+        self.click_text_if_text_exists_by_index("替换", index)
+        self.click_element_if_resource_exists("com.gemvary.vhpsmarthome:id/iv_replace_device_add")
+        self.click_element_if_text_contains(original_name)
+        self.click_first_element_if_text_exists("替换")
+        self.click_element_if_text_contains(original_name)
+        self.click_first_element_if_text_exists("确定")
+
     def add_and_replace_devices(self, room_name, template_device_name):
 
         replace_attempts = 0
@@ -662,10 +674,12 @@ def get_logcat_logs():
 
 if __name__ == "__main__":
     d = App()
-    index = d.get_device_index_by_name("超级设备-A8A")
-    if index != -1:
-        print(f"设备索引: {index}")
-    d.click_text_if_text_exists_by_index("加入", index)
+    d.replace_device("插卡取电-E6D", "插卡取电-8B6")
+    d.replace_device("2开关2场景1窗帘-A8A", "超级设备-8EA")
+    # index = d.get_device_index_by_name("超级设备-A8A")
+    # if index != -1:
+    #     print(f"设备索引: {index}")
+    # d.click_text_if_text_exists_by_index("加入", index)
     # d.locate_device_according_to_device_name(1)
     # d.config_panel_keys(5, "场景")
     #

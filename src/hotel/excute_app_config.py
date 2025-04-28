@@ -80,7 +80,7 @@ class ApplyTemplateWindow(QWidget):
         self.selected_device = None
         self.all_devices = set()  # 新增
         self.devices_file = Path.home() / ".vhpsmarthome_devices.json"  # 新增设备保存路径
-
+        self.confirmed_rows = set()  # 新增：记录已确认的行
         # 新增方法：保存设备到文件
 
     def save_devices_to_file(self):
@@ -164,6 +164,7 @@ class ApplyTemplateWindow(QWidget):
         self.apply_template_input = QLineEdit()
         self.apply_template_input.setText(self.last_apply_template)
 
+        # 创建应用模板按钮，并调整列跨度
         apply_btn = QPushButton('应用模板')
         apply_btn.clicked.connect(self.on_apply_click)
 
@@ -211,7 +212,22 @@ class ApplyTemplateWindow(QWidget):
         input_layout.addWidget(self.apply_room_input, 0, 1)
         input_layout.addWidget(apply_template_label, 1, 0)
         input_layout.addWidget(self.apply_template_input, 1, 1)
-        input_layout.addWidget(apply_btn, 2, 0, 1, 2)
+        input_layout.addWidget(apply_btn, 2, 0, 1, 2)  # 占据第2行，0-1列
+
+        # 创建保存和加载按钮，并添加到同一行（第2行）的后续列
+        save_btn = QPushButton('保存模板设备')
+        save_btn.clicked.connect(self.save_devices_to_file)
+        load_btn = QPushButton('加载模板设备')
+        load_btn.clicked.connect(self.load_devices_from_file)
+
+        # 将保存和加载按钮添加到第2行，列2和列3
+        input_layout.addWidget(save_btn, 2, 2)  # 第2行，列2
+        input_layout.addWidget(load_btn, 2, 3)  # 第2行，列3
+
+        # 确保后续行使用正确的列（例如替换设备按钮所在行）
+        input_layout.addWidget(replace_btn, 6, 0)
+        input_layout.addWidget(search_device_btn, 6, 1)
+        input_layout.addWidget(power_switch_btn, 6, 2)
 
         # 新增：将表格添加到布局中
         input_layout.addWidget(self.device_table, 3, 0, 1, 2)
@@ -226,14 +242,7 @@ class ApplyTemplateWindow(QWidget):
         input_layout.addWidget(power_switch_btn, 6, 2)
 
         input_tab.setLayout(input_layout)
-        # 在 input_layout 中添加保存和加载按钮（放在合适的位置，例如在应用模板按钮下方）
-        save_btn = QPushButton('保存当前设备')
-        save_btn.clicked.connect(self.save_devices_to_file)
-        load_btn = QPushButton('加载设备')
-        load_btn.clicked.connect(self.load_devices_from_file)
 
-        input_layout.addWidget(save_btn, 7, 0)  # 调整行号到合适位置
-        input_layout.addWidget(load_btn, 7, 1)
         # 创建操作记录标签页
         self.record_tab = QWidget()
         self.record_text_edit = QTextEdit()
@@ -314,20 +323,65 @@ class ApplyTemplateWindow(QWidget):
         self.apply_thread.start()
 
     def on_replace_click(self):
-        room_name = self.replace_room_input.text().strip()
-        device_name = self.replace_device_input.text().strip()
+        # 收集需要替换的设备对 (原设备名, 新设备名)
+        replace_pairs = []
+        for row in range(self.device_table.rowCount()):
+            # 获取第一列原设备名
+            original_item = self.device_table.item(row, 0)
+            if not original_item:
+                continue
+            original_name = original_item.text().strip()
+            print(original_name)
+            # 获取第二列下拉框选择的新设备名
+            combo = self.device_table.cellWidget(row, 1)
+            if not combo or combo.currentIndex() == -1:
+                continue
+            new_name = combo.currentText().strip()
+            print(new_name)
+            if original_name and new_name:
+                replace_pairs.append((original_name, new_name))
 
-        if not room_name or not device_name:
-            QMessageBox.warning(self, "参数错误", "请填写完整的添加并替换设备参数")
+        if not replace_pairs:
+            QMessageBox.warning(self, "操作终止", "没有已确认的替换设备对")
             return
 
-        self.save_config(self.apply_room_input.text().strip(), self.apply_template_input.text().strip(),
-                         room_name, device_name)
+        # 弹窗显示替换列表让用户确认
+        confirm_msg = "以下设备将被替换:\n\n" + "\n".join(
+            [f"{old} → {new}" for old, new in replace_pairs]
+        )
+        reply = QMessageBox.question(
+            self, "确认替换",
+            f"{confirm_msg}\n\n确定执行替换操作吗？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
 
-        self.replace_thread = AddAndReplaceDevicesThread(self.d, room_name, device_name)
-        self.replace_thread.finished.connect(self.show_success_message)
-        self.replace_thread.error.connect(self.show_error_message)
-        self.replace_thread.start()
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        # 执行替换操作
+        try:
+            for original_name, new_name in replace_pairs:
+                # 假设 App 类有 replace_device 方法
+                self.d.replace_device(original_name, new_name)
+
+            QMessageBox.information(self, "成功", "设备替换已完成")
+            self.confirmed_rows.clear()  # 清空确认记录
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"替换失败: {str(e)}")
+        # room_name = self.replace_room_input.text().strip()
+        # device_name = self.replace_device_input.text().strip()
+        #
+        # if not room_name or not device_name:
+        #     QMessageBox.warning(self, "参数错误", "请填写完整的添加并替换设备参数")
+        #     return
+        #
+        # self.save_config(self.apply_room_input.text().strip(), self.apply_template_input.text().strip(),
+        #                  room_name, device_name)
+        #
+        # self.replace_thread = AddAndReplaceDevicesThread(self.d, room_name, device_name)
+        # self.replace_thread.finished.connect(self.show_success_message)
+        # self.replace_thread.error.connect(self.show_error_message)
+        # self.replace_thread.start()
 
     def show_success_message(self, message):
         QMessageBox.information(self, "成功", message)
@@ -346,9 +400,32 @@ class ApplyTemplateWindow(QWidget):
                 # 初始化第二列为空的下拉框
                 combo = QComboBox()
                 combo.addItems(sorted(self.all_devices))
+                # 修改连接方式，传递行索引
                 combo.currentIndexChanged.connect(
-                    lambda idx, r=i: self.fix_selection(r, combo.itemText(idx)))
+                    lambda idx, r=i: self.on_combo_changed(r, combo.itemText(idx))
+                )
                 self.device_table.setCellWidget(i, 1, combo)
+
+    def on_combo_changed(self, row, selected_device):
+        pass
+        """新的下拉框选择事件处理"""
+        # if row in self.confirmed_rows:
+        #     return  # 已确认的行不再处理
+        #
+        # # 弹出确认对话框
+        # reply = QMessageBox.question(
+        #     self, '确认选择',
+        #     f'确定要绑定设备：{selected_device}？',
+        #     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        # )
+        #
+        # if reply == QMessageBox.StandardButton.Yes:
+        #     self.confirmed_rows.add(row)  # 标记已确认
+        #     self.fix_selection(row, selected_device)
+        # else:
+        #     # 恢复原值或清空选择
+        #     combo = self.device_table.cellWidget(row, 1)
+        #     combo.setCurrentIndex(-1)
 
     def show_error_message(self, message):
         QMessageBox.critical(self, "执行错误", message)
@@ -356,23 +433,8 @@ class ApplyTemplateWindow(QWidget):
 
     # 新增：搜索设备按钮点击事件处理函数
     def on_search_device_click(self):
-        # 第二列（带全量设备的下拉框）
-        # # 安全更新下拉框内容
-        # row_count = self.device_table.rowCount()
-        # for row in range(row_count):
-        #     try:
-        #         combo = self.device_table.cellWidget(row, 1)
-        #         if isinstance(combo, QComboBox):
-        #             print(row)
-        #             combo.clear()
-        #             combo.addItem(f"测试设备-{row}")
-        #             combo.setCurrentText("jfofidsi")
-        #         else:
-        #             print(f"Row {row}: 控件类型错误")
-        #     except Exception as e:
-        #         print(f"Row {row} 操作失败: {e}")
-        # self.device_table.viewport().update()  # 刷新界面
-        # # 新增：在开始搜索前重置设备信息
+
+        # 新增：在开始搜索前重置设备信息
         self.d.add_light_switchs()
 
         if self.log_monitor_thread is not None:
@@ -385,6 +447,7 @@ class ApplyTemplateWindow(QWidget):
         # self.log_monitor_thread.new_data.connect(self.update_device_table)
         self.log_monitor_thread.start()
         QMessageBox.information(self, "提示", "请将设备断电、上电")
+
 
     def update_device_table(self, device_info_list):
         print(f"[DEBUG] Received devices: {device_info_list}")
@@ -405,16 +468,33 @@ class ApplyTemplateWindow(QWidget):
         # 安全更新下拉框内容
         row_count = self.device_table.rowCount()
         for row in range(row_count):
+            if row in self.confirmed_rows:
+                continue  # 跳过已确认的行
+
             try:
                 combo = self.device_table.cellWidget(row, 1)
                 if isinstance(combo, QComboBox):
-                    print(row)
+                    current = combo.currentText()  # 保留当前选择
                     combo.clear()
                     combo.addItems(sorted(self.all_devices))
+                    combo.setCurrentText(current)  # 恢复之前的选中项
             except Exception as e:
                 print(f"Row {row} 操作失败: {e}")
-        self.device_table.viewport().update()  # 刷新界面
-        print("[DEBUG] 界面刷新完成")
+
+        self.device_table.viewport().update()
+        # # 安全更新下拉框内容
+        # row_count = self.device_table.rowCount()
+        # for row in range(row_count):
+        #     try:
+        #         combo = self.device_table.cellWidget(row, 1)
+        #         if isinstance(combo, QComboBox):
+        #             print(row)
+        #             combo.clear()
+        #             combo.addItems(sorted(self.all_devices))
+        #     except Exception as e:
+        #         print(f"Row {row} 操作失败: {e}")
+        # self.device_table.viewport().update()  # 刷新界面
+        # print("[DEBUG] 界面刷新完成")
 
     def fix_selection(self, row, selected_device):
         item = QTableWidgetItem(selected_device)
