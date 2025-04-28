@@ -2,7 +2,7 @@ import sys
 import json
 from pathlib import Path
 from time import sleep
-from PyQt5.QtCore import QThread, pyqtSignal
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QLabel, QLineEdit,
     QPushButton, QVBoxLayout, QGridLayout, QMessageBox,
@@ -79,6 +79,41 @@ class ApplyTemplateWindow(QWidget):
         self.applied_devices = []
         self.selected_device = None
         self.all_devices = set()  # 新增
+        self.devices_file = Path.home() / ".vhpsmarthome_devices.json"  # 新增设备保存路径
+
+        # 新增方法：保存设备到文件
+
+    def save_devices_to_file(self):
+        try:
+            with open(self.devices_file, 'w', encoding='utf-8') as f:
+                json.dump(self.applied_devices, f, ensure_ascii=False)
+            QMessageBox.information(self, "保存成功", "设备列表已保存到本地文件")
+        except Exception as e:
+            QMessageBox.warning(self, "保存失败", f"无法保存设备列表: {str(e)}")
+
+        # 新增方法：从文件加载设备
+
+    def load_devices_from_file(self):
+        try:
+            if not self.devices_file.exists():
+                QMessageBox.warning(self, "加载失败", "未找到保存的设备文件")
+                return
+
+            with open(self.devices_file, 'r', encoding='utf-8') as f:
+                devices = json.load(f)
+
+            # 还原到表格
+            self.applied_devices = devices
+            self.device_table.setRowCount(len(devices))
+            for i, name in enumerate(devices):
+                self.device_table.setItem(i, 0, QTableWidgetItem(name))
+                # 初始化下拉框
+                combo = QComboBox()
+                combo.addItems(sorted(self.all_devices))
+                self.device_table.setCellWidget(i, 1, combo)
+            QMessageBox.information(self, "加载成功", "设备列表已从文件还原")
+        except Exception as e:
+            QMessageBox.warning(self, "加载失败", f"读取设备文件失败: {str(e)}")
 
     def load_config(self):
         if self.config_path.exists():
@@ -148,7 +183,21 @@ class ApplyTemplateWindow(QWidget):
         self.device_table.setColumnCount(2)
         self.device_table.setHorizontalHeaderLabels(['应用模板获取的设备名称', '搜索设备上报的设备名称'])
         self.device_table.horizontalHeader().setStretchLastSection(True)
-
+        # 在初始化表格时设置下拉框样式
+        self.device_table.setStyleSheet("""
+               QComboBox {
+                    min-width: 200px;   /* 增大最小宽度 */
+                    min-height: 30px;  /* 增大最小高度 */
+                }
+                QComboBox::drop-down {
+                    subcontrol-origin: padding;
+                    subcontrol-position: right center;
+                    width: 20px;
+                    border-left-width: 1px;
+                    border-left-color: gray;
+                    border-left-style: solid;
+                }
+             """)
         # 新增：创建搜索设备和通断电开关按钮
         search_device_btn = QPushButton('搜索设备')
         power_switch_btn = QPushButton('通断电开关')
@@ -177,7 +226,14 @@ class ApplyTemplateWindow(QWidget):
         input_layout.addWidget(power_switch_btn, 6, 2)
 
         input_tab.setLayout(input_layout)
+        # 在 input_layout 中添加保存和加载按钮（放在合适的位置，例如在应用模板按钮下方）
+        save_btn = QPushButton('保存当前设备')
+        save_btn.clicked.connect(self.save_devices_to_file)
+        load_btn = QPushButton('加载设备')
+        load_btn.clicked.connect(self.load_devices_from_file)
 
+        input_layout.addWidget(save_btn, 7, 0)  # 调整行号到合适位置
+        input_layout.addWidget(load_btn, 7, 1)
         # 创建操作记录标签页
         self.record_tab = QWidget()
         self.record_text_edit = QTextEdit()
@@ -281,6 +337,8 @@ class ApplyTemplateWindow(QWidget):
         if "已成功应用模板" in message:
             device_names = self.d.get_device_names()
             self.applied_devices = device_names
+            # 保存到文件
+            self.save_devices_to_file()  # 新增保存操作
             self.device_table.setRowCount(len(device_names))  # 固定行数
             for i, name in enumerate(device_names):
                 # 初始化第一列
@@ -298,13 +356,33 @@ class ApplyTemplateWindow(QWidget):
 
     # 新增：搜索设备按钮点击事件处理函数
     def on_search_device_click(self):
-        # 新增：在开始搜索前重置设备信息
+        # 第二列（带全量设备的下拉框）
+        # # 安全更新下拉框内容
+        # row_count = self.device_table.rowCount()
+        # for row in range(row_count):
+        #     try:
+        #         combo = self.device_table.cellWidget(row, 1)
+        #         if isinstance(combo, QComboBox):
+        #             print(row)
+        #             combo.clear()
+        #             combo.addItem(f"测试设备-{row}")
+        #             combo.setCurrentText("jfofidsi")
+        #         else:
+        #             print(f"Row {row}: 控件类型错误")
+        #     except Exception as e:
+        #         print(f"Row {row} 操作失败: {e}")
+        # self.device_table.viewport().update()  # 刷新界面
+        # # 新增：在开始搜索前重置设备信息
         self.d.add_light_switchs()
 
         if self.log_monitor_thread is not None:
             self.log_monitor_thread.stop()
         self.log_monitor_thread = LogMonitorThread(self.d)
-        self.log_monitor_thread.new_data.connect(self.update_device_table)
+        self.log_monitor_thread.new_data.connect(
+            self.update_device_table,
+            Qt.ConnectionType.QueuedConnection  # 显式指定线程安全连接
+        )
+        # self.log_monitor_thread.new_data.connect(self.update_device_table)
         self.log_monitor_thread.start()
         QMessageBox.information(self, "提示", "请将设备断电、上电")
 
@@ -324,21 +402,19 @@ class ApplyTemplateWindow(QWidget):
         self.all_devices.update(new_devices)
         print(f"[DEBUG] All devices after update: {self.all_devices}")
 
-        # 强制更新所有行的下拉选项
-        for row in range(self.device_table.rowCount()):
-            combo = self.device_table.cellWidget(row, 1)
-            if combo:
-                current_text = combo.currentText()
-                combo.blockSignals(True)  # 防止触发信号
-                combo.clear()
-                combo.addItems(sorted(self.all_devices))
-                if current_text in self.all_devices:
-                    combo.setCurrentText(current_text)
-                else:
-                    combo.setCurrentIndex(-1)
-                combo.blockSignals(False)  # 恢复信号
-
-        self.device_table.viewport().update()  # 强制刷新界面
+        # 安全更新下拉框内容
+        row_count = self.device_table.rowCount()
+        for row in range(row_count):
+            try:
+                combo = self.device_table.cellWidget(row, 1)
+                if isinstance(combo, QComboBox):
+                    print(row)
+                    combo.clear()
+                    combo.addItems(sorted(self.all_devices))
+            except Exception as e:
+                print(f"Row {row} 操作失败: {e}")
+        self.device_table.viewport().update()  # 刷新界面
+        print("[DEBUG] 界面刷新完成")
 
     def fix_selection(self, row, selected_device):
         item = QTableWidgetItem(selected_device)
