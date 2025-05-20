@@ -90,7 +90,7 @@ def get_template_list():
         print('token:', token, '+++++++++++++')
         API_KEY = "c80571ae360349c5a838a719838781f0"
         APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee".encode('utf-8')
-        message = "GET/pcs/templates/vh-templates?projectId=10086".encode('utf-8')
+        message = "GET/pcs/templates/vh-templates".encode('utf-8')
         hash_object = hmac.new(APP_SECRET, message, hashlib.sha256)
         hex_dig = hash_object.hexdigest()
         print(hex_dig)
@@ -226,6 +226,7 @@ class MatrixDeviceRelationApp(QMainWindow):
 
 
 if __name__ == '__main__':
+    get_template_list()
     app = QApplication(sys.argv)
     window = MatrixDeviceRelationApp()
     window.show()
