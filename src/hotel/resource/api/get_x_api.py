@@ -31,12 +31,6 @@ SWITCH_KEY_MAP = {
 }
 
 
-def insert_linebreaks(text, interval=2):
-    """每interval个汉字/字符插入一个换行符"""
-    lines = [text[i:i+interval] for i in range(0, len(text), interval)]
-    return '\n'.join(lines)
-
-
 def get_template():
     # 登录部分
     url_login = 'https://pcs.gemvary.cn/api/auth/engineer/login'
@@ -66,13 +60,13 @@ def get_template():
         API_KEY = "c80571ae360349c5a838a719838781f0"
         APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee".encode('utf-8')
 
-        message = "GET/pcs/templates/vh-template/574".encode('utf-8')
+        message = "GET/pcs/templates/vh-template/584".encode('utf-8')
         hash_object = hmac.new(APP_SECRET, message, hashlib.sha256)
         hex_dig = hash_object.hexdigest()
 
         result = f"key={API_KEY};sign={hex_dig}"
 
-        url_template = "https://api.gemvary.cn/pcs/templates/vh-template/574"
+        url_template = "https://api.gemvary.cn/pcs/templates/vh-template/584"
 
         payload_template = {}
         headers_template = {
@@ -137,6 +131,52 @@ def get_template_list():
             return response_template.json()
         else:
             print(f"获取模板请求失败，状态码: {response_template.status_code}，原因: {response_template.text}")
+
+
+def append_voice_control_rows(rows, slave_columns, data, slave_devices):
+    print('[append_voice_control_rows] 开始执行')
+    device_list = data.get('deviceList', [])
+    mapping_list = data.get('mappingList', [])  # 使用mappingList而非controllerRelation
+
+    device_name_map = {d['deviceId']: d.get('deviceName', f"未知({d['deviceId']})") for d in device_list}
+
+    for mapping in mapping_list:
+        # 主控设备是语音管家
+        master_id = mapping['mappingPrimaryId']
+        master_channel = mapping['mappingPrimaryChannel']
+        # 被控设备是窗帘
+        controlled_dev_id = mapping['mappingValueId']
+        controlled_channel = mapping['mappingValueChannel']
+
+        # 确定状态键（窗帘用mode）
+        switch_key = "mode" if "开合帘" in device_name_map.get(controlled_dev_id, '') else f"switch_{controlled_channel}"
+
+        # 生成行键
+        master_name = device_name_map.get(master_id, f"未知({master_id})")
+        row_key = f"{master_name}|语音控制|{master_channel}"
+
+        # 更新行
+        if row_key not in rows:
+            rows[row_key] = {
+                'master': master_name,
+                'scene': '语音控制',
+                'channel': master_channel,
+                'slaves': {}
+            }
+        rows[row_key]['slaves'][controlled_dev_id] = {switch_key: 1}  # 假设状态为1
+
+        # 更新列
+        if (controlled_dev_id, switch_key) not in slave_columns:
+            slave_columns.append((controlled_dev_id, switch_key))
+        if controlled_dev_id not in slave_devices:
+            slave_devices[controlled_dev_id] = device_name_map.get(controlled_dev_id, f"未知({controlled_dev_id})")
+
+
+def insert_linebreaks(text, interval=2):
+    """每interval个汉字/字符插入一个换行符"""
+    lines = [text[i:i+interval] for i in range(0, len(text), interval)]
+    return '\n'.join(lines)
+
 
 
 class WrappingHeader(QHeaderView):
@@ -215,7 +255,6 @@ class MatrixDeviceRelationApp(QMainWindow):
             QMessageBox.critical(self, "错误", f"数据加载失败：{str(e)}")
 
     def build_matrix(self):
-        """构建设备关系矩阵，支持每个受控设备展开自身 devStatus 的子键"""
         try:
             data = json.loads(self.json_data['data'])
 
@@ -227,7 +266,6 @@ class MatrixDeviceRelationApp(QMainWindow):
                 name = device['deviceName'] if device else f"未知设备({device_id})"
                 slave_devices[device_id] = name
 
-            # === 收集每个设备对应的 switch key 列 ===
             device_switch_keys = {did: set() for did in device_ids}
             for sdev in data['sceneDeviceList']:
                 did = sdev['deviceId']
@@ -236,17 +274,50 @@ class MatrixDeviceRelationApp(QMainWindow):
                         'devStatus']
                     if isinstance(dev_status, dict):
                         device_switch_keys[did].update(dev_status.keys())
-                except:
-                    pass
+                except Exception as e:
+                    print(f"[sceneDeviceList devStatus 错误] 设备ID: {did} 错误信息: {e}")
 
-            # === 构造列结构 ===
-            slave_columns = []  # [(deviceId, switch_key)]
-            for did in device_ids:
+            # === wsDevData 扫描 ===
+            print("[wsDevData] 开始扫描")
+            for wsdev in data.get('wsDevData', []):
+                did = wsdev.get('deviceId')
+                dev_status = wsdev.get('devStatus', {})
+                print(f"  wsDev deviceId={did}, devStatus={dev_status}")
+                if did:
+                    if did not in device_switch_keys:
+                        device_switch_keys[did] = set()
+                    if isinstance(dev_status, dict):
+                        device_switch_keys[did].update(dev_status.keys())
+
+            # 在 build_matrix 函数中处理 controllerRelationInfoList 处修改：
+            print("[controllerRelationInfoList] 映射信息如下：")
+            for cr in data.get('controllerRelationInfoList', []):  # 修正键名
+                ctl = cr.get('ctlDevId')
+                ch = cr.get('ctlChannel')
+                dev_id = cr.get('deviceId')
+                dev_ch = cr.get('devChannel')
+                print(f"  {dev_id} 通道 {dev_ch} 控制 {ctl} 的 switch_{ch}")
+
+                # 正确记录被控设备的 switch 键
+                switch_key = f"switch_{ch}"
+                if ctl:
+                    if ctl not in device_switch_keys:
+                        device_switch_keys[ctl] = set()
+                    device_switch_keys[ctl].add(switch_key)
+                    # 更新 slave_devices
+                    device = next((d for d in data['deviceList'] if d['deviceId'] == ctl), None)
+                    name = device['deviceName'] if device else f"未知设备({ctl})"
+                    slave_devices[ctl] = name
+
+            # === 构造 slave_columns ===
+            slave_columns = []
+            for did in device_switch_keys:
                 for sk in sorted(device_switch_keys[did]):
                     slave_columns.append((did, sk))
 
-            # === 行数据组织 ===
+            # === 行数据 ===
             rows = {}
+            # === mappingList 处理 ===
             for mapping in data['mappingList']:
                 scene_no = mapping['mappingValueId']
                 scene = next((s for s in data['sceneList'] if s['sceneNo'] == scene_no),
@@ -254,14 +325,29 @@ class MatrixDeviceRelationApp(QMainWindow):
                 master_device = next((d for d in data['deviceList'] if d['deviceId'] == mapping['mappingPrimaryId']),
                                      {'deviceName': "未知主控设备"})
 
+                # 关键修改：获取被控设备ID和通道
+                controlled_dev_id = mapping['mappingValueId']
+                controlled_channel = mapping['mappingValueChannel']
+
+                # 针对窗帘设备，状态键是 mode 而不是 switch
+                switch_key = "mode" if "开合帘" in master_device.get('deviceName', '') else f"switch_{controlled_channel}"
+
+                # 将受控设备的状态键加入列
+                if controlled_dev_id not in device_switch_keys:
+                    device_switch_keys[controlled_dev_id] = set()
+                device_switch_keys[controlled_dev_id].add(switch_key)
+
+                # 更新行数据
                 key = f"{master_device['deviceName']}|{scene['sceneName']}|{mapping['mappingPrimaryChannel']}"
                 if key not in rows:
                     rows[key] = {
                         'master': master_device['deviceName'],
                         'scene': scene['sceneName'],
                         'channel': mapping['mappingPrimaryChannel'],
-                        'slaves': {}  # deviceId -> devStatus
+                        'slaves': {}
                     }
+                # 添加窗帘状态（假设默认值为1）
+                rows[key]['slaves'][controlled_dev_id] = {switch_key: 1}
 
                 for sdev in data['sceneDeviceList']:
                     if sdev['sceneNo'] == scene_no:
@@ -272,17 +358,28 @@ class MatrixDeviceRelationApp(QMainWindow):
                             dev_status = {}
                         rows[key]['slaves'][sdev['deviceId']] = dev_status
 
+            # === 加入语音管家控制 ===
+            print("[append_voice_control_rows] 开始执行")
+            append_voice_control_rows(rows, slave_columns, data, slave_devices)
+
+            # === 打印每一行最终包含哪些设备状态 ===
+            print("[rows] 最终行内容如下：")
+            for rkey, rdata in rows.items():
+                print(f"  行: {rkey}")
+                for did, devstat in rdata['slaves'].items():
+                    print(f"    控制 {did}: {devstat}")
+
             # === 设置列 ===
             columns = ["主控设备", "场景名称", "通道号"]
             for did, sk in slave_columns:
-                name = insert_linebreaks(slave_devices[did])
-                sk_chinese = SWITCH_KEY_MAP.get(sk, sk)  # 找不到就用原始英文
+                name = insert_linebreaks(slave_devices.get(did, f"未知设备({did})"))
+                sk_chinese = SWITCH_KEY_MAP.get(sk, sk)
                 columns.append(f"{name}\n{sk_chinese}")
             self.table.setColumnCount(len(columns))
             self.table.setHorizontalHeaderLabels(columns)
             self.table.setRowCount(len(rows))
 
-            # === 填充行 ===
+            # === 填充表格 ===
             for row_idx, (key, row_data) in enumerate(rows.items()):
                 self.table.setItem(row_idx, 0, QTableWidgetItem(row_data['master']))
                 self.table.setItem(row_idx, 1, QTableWidgetItem(row_data['scene']))
@@ -292,16 +389,16 @@ class MatrixDeviceRelationApp(QMainWindow):
                     dev_status = row_data['slaves'].get(did, {})
                     value = dev_status.get(sk, "N/A")
                     self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+
         except Exception as e:
             QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
-        # 设置列宽（2个汉字宽度大约40px）
+
         self.table.setColumnWidth(0, 150)
         self.table.setColumnWidth(1, 150)
         self.table.setColumnWidth(2, 80)
         for col in range(3, self.table.columnCount()):
-            self.table.setColumnWidth(col,50)
+            self.table.setColumnWidth(col, 50)
 
-        # 设置列头高度以显示换行
         self.table.horizontalHeader().setFixedHeight(100)
 
 
