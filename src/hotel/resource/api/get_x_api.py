@@ -8,7 +8,7 @@ import requests
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout,
     QWidget, QMessageBox, QLabel, QLineEdit, QScrollArea, QHeaderView, QStyleOptionHeader,
-    QStyle, QTextEdit
+    QStyle, QTextEdit, QComboBox
 )
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QTextOption, QPainter
@@ -92,9 +92,81 @@ def get_template(token):
     else:
         raise Exception(f"获取模板失败: {response.status_code}, {response.text}")
 
+def get_template_list(token):
+    API_KEY = "c80571ae360349c5a838a719838781f0"
+    APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee".encode('utf-8')
+    message = "GET/pcs/templates/vh-templates".encode('utf-8')
+    hash_object = hmac.new(APP_SECRET, message, hashlib.sha256)
+    hex_dig = hash_object.hexdigest()
+    headers_template = {
+        'X-API-KEY': f"key={API_KEY};sign={hex_dig}",
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}'
+    }
+    url = "https://api.gemvary.cn/pcs/templates/vh-templates?projectId=10086"
+
+    response = requests.get(url, headers=headers_template)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(f"获取模板失败: {response.status_code}, {response.text}")
+
 
 def insert_linebreaks(text, interval=2):
     return '\n'.join([text[i:i + interval] for i in range(0, len(text), interval)])
+
+
+def get_template_by_id(token, template_id):
+    API_KEY = "c80571ae360349c5a838a719838781f0"
+    APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee"
+    api_path = f"/pcs/templates/vh-template/{template_id}"
+    sign = generate_sign(api_path, APP_SECRET)
+
+    headers = {
+        'X-API-KEY': f"key={API_KEY};sign={sign}",
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}'
+    }
+
+    response = requests.get(f"https://api.gemvary.cn{api_path}", headers=headers)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(f"获取模板失败: {response.status_code}, {response.text}")
+
+
+class TemplateSelectWindow(QWidget):
+    def __init__(self, token, template_list):
+        super().__init__()
+        self.token = token
+        self.template_list = template_list
+        self.setWindowTitle("选择模板")
+        self.setGeometry(400, 300, 400, 200)
+
+        self.template_combo = QComboBox()
+        self.template_map = {t["name"]: t["id"] for t in template_list}
+        self.template_combo.addItems(self.template_map.keys())
+
+        self.confirm_button = QPushButton("确定")
+        self.confirm_button.clicked.connect(self.load_template)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("请选择模板："))
+        layout.addWidget(self.template_combo)
+        layout.addWidget(self.confirm_button)
+        self.setLayout(layout)
+
+    def load_template(self):
+        selected_name = self.template_combo.currentText()
+        template_id = self.template_map[selected_name]
+
+        try:
+            json_data = get_template_by_id(self.token, template_id)
+            self.hide()
+            self.main_app = MatrixDeviceRelationApp(json_data)
+            self.main_app.show()
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"加载模板失败: {str(e)}")
 
 
 class WrappingHeader(QHeaderView):
@@ -130,7 +202,7 @@ class MatrixDeviceRelationApp(QMainWindow):
         self.initUI()
 
     def initUI(self):
-        self.setWindowTitle("设备关系矩阵分析工具")
+        self.setWindowTitle("蓝牙模板预览工具")
         self.setGeometry(300, 200, 1200, 800)
 
         scroll = QScrollArea()
@@ -224,7 +296,7 @@ class LoginWindow(QWidget):
         self.login_btn.clicked.connect(self.handle_login)
 
         layout = QVBoxLayout()
-        layout.addWidget(QLabel("请输入登录信息"))
+        layout.addWidget(QLabel("请输入蓝牙配置宝的登录信息"))
         layout.addWidget(self.username_input)
         layout.addWidget(self.password_input)
         layout.addWidget(self.login_btn)
@@ -245,10 +317,15 @@ class LoginWindow(QWidget):
         try:
             token = login_and_get_token(username, password)
             save_login_config(username, password)
-            json_data = get_template(token)
-            self.hide()
-            self.main_app = MatrixDeviceRelationApp(json_data)
-            self.main_app.show()
+            template_list = get_template_list(token)
+
+            if template_list:
+                self.hide()
+                self.template_selector = TemplateSelectWindow(token, template_list)
+                self.template_selector.show()
+            else:
+                QMessageBox.warning(self, "警告", "未获取到模板列表")
+
         except Exception as e:
             QMessageBox.critical(self, "错误", str(e))
 
