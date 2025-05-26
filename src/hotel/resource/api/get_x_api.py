@@ -8,7 +8,7 @@ import requests
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout,
     QWidget, QMessageBox, QLabel, QLineEdit, QScrollArea, QHeaderView, QStyleOptionHeader,
-    QStyle, QTextEdit, QComboBox
+    QStyle, QTextEdit, QComboBox, QHBoxLayout
 )
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QTextOption, QPainter
@@ -163,7 +163,7 @@ class TemplateSelectWindow(QWidget):
         try:
             json_data = get_template_by_id(self.token, template_id)
             self.hide()
-            self.main_app = MatrixDeviceRelationApp(json_data)
+            self.main_app = MatrixDeviceRelationApp(json_data, self.token, self.template_list)
             self.main_app.show()
         except Exception as e:
             QMessageBox.critical(self, "错误", f"加载模板失败: {str(e)}")
@@ -196,8 +196,10 @@ class WrappingHeader(QHeaderView):
 
 
 class MatrixDeviceRelationApp(QMainWindow):
-    def __init__(self, json_data):
+    def __init__(self, json_data, token=None, template_list=None):
         super().__init__()
+        self.token = token
+        self.template_list = template_list
         self.json_data = json_data
         self.initUI()
 
@@ -211,6 +213,15 @@ class MatrixDeviceRelationApp(QMainWindow):
         scroll.setWidgetResizable(True)
 
         layout = QVBoxLayout()
+        # 顶部按钮区域
+        top_layout = QHBoxLayout()
+        top_layout.addStretch()
+
+        return_button = QPushButton("返回选择模板")
+        return_button.clicked.connect(self.go_back_to_template_select)
+        top_layout.addWidget(return_button)
+
+        layout.addLayout(top_layout)
         layout.addWidget(scroll)
 
         container = QWidget()
@@ -218,6 +229,11 @@ class MatrixDeviceRelationApp(QMainWindow):
         self.setCentralWidget(container)
 
         self.build_matrix()
+
+    def go_back_to_template_select(self):
+        self.hide()
+        self.selector = TemplateSelectWindow(self.token, self.template_list)
+        self.selector.show()
 
     def build_matrix(self):
         try:
