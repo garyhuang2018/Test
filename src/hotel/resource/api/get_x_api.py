@@ -12,7 +12,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QTextOption, QPainter
-
+import re
 
 CONFIG_FILE = "config.json"
 # 中文名映射
@@ -293,6 +293,7 @@ class MatrixDeviceRelationApp(QMainWindow):
 
     def build_matrix(self):
         try:
+
             from api.read_product_type import get_product_name
 
             data = json.loads(self.json_data['data'])
@@ -301,6 +302,33 @@ class MatrixDeviceRelationApp(QMainWindow):
             scene_device_list = data.get('sceneDeviceList', [])
             mapping_list = data.get('mappingList', [])
 
+            # 设备ID到每个 keyName 的中文名映射
+            device_keyname_map = {}
+            for device in device_list:
+                did = device.get("deviceId")
+                key_map = {}
+
+                # 1. 先尝试从 uiRemark 中提取 switch_name_*
+                ui_remark = device.get("uiRemark")
+                if ui_remark:
+                    try:
+                        remark_dict = json.loads(ui_remark)
+                        for key, val in remark_dict.items():
+                            match = re.match(r"switch_name_(\d+)", key)
+                            if match:
+                                switch_idx = match.group(1)
+                                key_map[f"switch_{switch_idx}"] = val
+                    except Exception as e:
+                        print(f"[警告] uiRemark 解析失败 for device {did}: {e}")
+
+                # 2. 若 keyName 字段也存在，也合并进去（不覆盖 uiRemark 中已有的）
+                key_name_dict = device.get("keyName", {})
+                if isinstance(key_name_dict, dict):
+                    for k, v in key_name_dict.items():
+                        key_map.setdefault(k, v)
+
+                # 保存最终映射
+                device_keyname_map[did] = key_map
             # 创建设备ID到产品型号的映射
             device_product_map = {}
             for device in device_list:
@@ -334,8 +362,9 @@ class MatrixDeviceRelationApp(QMainWindow):
             for did, keys in switch_keys_map.items():
                 for k in sorted(keys):
                     slave_columns.append((did, k))
-                    name = insert_linebreaks(dev_name_map.get(did, did))
-                    columns.append(f"{name}\n{SWITCH_KEY_MAP.get(k, k)}")
+                    dev_name = insert_linebreaks(dev_name_map.get(did, did))
+                    key_cn = device_keyname_map.get(did, {}).get(k, SWITCH_KEY_MAP.get(k, k))
+                    columns.append(f"{dev_name}\n{key_cn}")
 
             self.table.setColumnCount(len(columns))
             self.table.setHorizontalHeaderLabels(columns)
@@ -389,6 +418,9 @@ class MatrixDeviceRelationApp(QMainWindow):
             self.table.horizontalHeader().setFixedHeight(100)
             self.table.resizeColumnsToContents()
 
+        # except ModuleNotFoundError:
+        #     # 打包后的路径（假设 read_product_type.py 在当前目录下）
+        #     from read_product_type import get_product_name
         except Exception as e:
             QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
 
