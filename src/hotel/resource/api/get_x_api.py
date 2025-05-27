@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QTextOption, QPainter
 
+
 CONFIG_FILE = "config.json"
 # 中文名映射
 SWITCH_KEY_MAP = {
@@ -74,10 +75,10 @@ def login_and_get_token(username, password):
         raise Exception(f"登录失败: {response.status_code}, {response.text}")
 
 
-def get_template(token):
+def get_template(token, template_id):
     API_KEY = "c80571ae360349c5a838a719838781f0"
     APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee"
-    api_path = "/pcs/templates/vh-template/584"
+    api_path = f"/pcs/templates/vh-template/{template_id}"
     sign = generate_sign(api_path, APP_SECRET)
 
     headers = {
@@ -91,6 +92,7 @@ def get_template(token):
         return response.json()
     else:
         raise Exception(f"获取模板失败: {response.status_code}, {response.text}")
+
 
 def get_template_list(token):
     API_KEY = "c80571ae360349c5a838a719838781f0"
@@ -129,7 +131,9 @@ def get_template_by_id(token, template_id):
     }
 
     response = requests.get(f"https://api.gemvary.cn{api_path}", headers=headers)
+
     if response.status_code == 200:
+        print(response.json())
         return response.json()
     else:
         raise Exception(f"获取模板失败: {response.status_code}, {response.text}")
@@ -161,12 +165,64 @@ class TemplateSelectWindow(QWidget):
         template_id = self.template_map[selected_name]
 
         try:
+
             json_data = get_template_by_id(self.token, template_id)
+
             self.hide()
             self.main_app = MatrixDeviceRelationApp(json_data, self.token, self.template_list)
             self.main_app.show()
         except Exception as e:
             QMessageBox.critical(self, "错误", f"加载模板失败: {str(e)}")
+
+    def handle_selection(self):
+        selected_row = self.table.currentRow()
+        if selected_row == -1:
+            QMessageBox.warning(self, "提示", "请先选择一个模板")
+            return
+
+        template_id_item = self.table.item(selected_row, 0)
+        template_name_item = self.table.item(selected_row, 1)
+
+        if not template_id_item:
+            QMessageBox.warning(self, "提示", "选中的模板无效")
+            return
+
+        template_id = int(template_id_item.text())
+        template_name = template_name_item.text() if template_name_item else ""
+
+        try:
+            # 获取模板内容
+            template_data = get_template(self.token, template_id)
+
+            # ✅ 打印原始模板 JSON（格式化）
+            print("获取到的原始模板内容：")
+            print(json.dumps(template_data, indent=2, ensure_ascii=False))
+
+            # ✅ 解析 data 字段中的设备、场景、映射等
+            if 'data' in template_data:
+                parsed_data = json.loads(template_data['data'])
+
+                print("\n--- 设备列表 deviceList ---")
+                print(json.dumps(parsed_data.get('deviceList', []), indent=2, ensure_ascii=False))
+
+                print("\n--- 场景列表 sceneList ---")
+                print(json.dumps(parsed_data.get('sceneList', []), indent=2, ensure_ascii=False))
+
+                print("\n--- 场景设备列表 sceneDeviceList ---")
+                print(json.dumps(parsed_data.get('sceneDeviceList', []), indent=2, ensure_ascii=False))
+
+                print("\n--- 控制关系映射 mappingList ---")
+                print(json.dumps(parsed_data.get('mappingList', []), indent=2, ensure_ascii=False))
+
+            # 隐藏模板选择窗口
+            self.hide()
+
+            # 显示主界面（设备关系矩阵）
+            self.matrix_window = MatrixDeviceRelationApp(template_data)
+            self.matrix_window.show()
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"获取模板失败：{str(e)}")
 
 
 class WrappingHeader(QHeaderView):
@@ -237,13 +293,28 @@ class MatrixDeviceRelationApp(QMainWindow):
 
     def build_matrix(self):
         try:
+            from api.read_product_type import get_product_name
+
             data = json.loads(self.json_data['data'])
             device_list = data.get('deviceList', [])
             scene_list = data.get('sceneList', [])
             scene_device_list = data.get('sceneDeviceList', [])
             mapping_list = data.get('mappingList', [])
 
-            # 设备名映射
+            # 创建设备ID到产品型号的映射
+            device_product_map = {}
+            for device in device_list:
+                try:
+                    factory_code = device.get('factoryCode')
+                    factory_type = device.get('factoryType')
+                    factory_subtype = device.get('factorySubtype')
+                    if factory_code is not None and factory_type is not None:
+                        product_model = get_product_name(int(factory_code), int(factory_type), int(factory_subtype))
+                        device_product_map[device['deviceId']] = product_model
+                except (KeyError, ValueError, TypeError) as e:
+                    print(f"获取产品型号失败: {str(e)}")
+
+            # 原有设备名映射
             dev_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
             switch_keys_map = {}
 
@@ -257,7 +328,8 @@ class MatrixDeviceRelationApp(QMainWindow):
                 except:
                     continue
 
-            columns = ["主控设备", "场景名称", "通道号"]
+            # 列定义：主控设备 + 验收动作 + 所有被控设备状态列
+            columns = ["主控设备", "验收动作"]
             slave_columns = []
             for did, keys in switch_keys_map.items():
                 for k in sorted(keys):
@@ -276,21 +348,46 @@ class MatrixDeviceRelationApp(QMainWindow):
                 master_name = dev_name_map.get(master_id, master_id)
 
                 self.table.setItem(row_idx, 0, QTableWidgetItem(master_name))
-                self.table.setItem(row_idx, 1, QTableWidgetItem(scene['sceneName']))
-                self.table.setItem(row_idx, 2, QTableWidgetItem(str(mapping.get('mappingPrimaryChannel'))))
 
-                for col_idx, (did, skey) in enumerate(slave_columns, start=3):
+                # 构建“验收动作”列内容（场景名称 + 通道号翻译）
+                channel = str(mapping.get('mappingPrimaryChannel', ''))
+                product_model = device_product_map.get(master_id, "")
+                if product_model == "插卡取电":
+                    if channel == "1":
+                        channel = "插卡"
+                    elif channel == "2":
+                        channel = "拔卡"
+
+                # action_text = f"{scene['sceneName']} - 通道{channel}" if channel else scene['sceneName']
+                action_text = f" {channel}" if channel else scene['sceneName']
+                self.table.setItem(row_idx, 1, QTableWidgetItem(action_text))
+
+                # 设备状态翻译逻辑
+                for col_idx, (did, skey) in enumerate(slave_columns, start=2):
                     val = "N/A"
                     for sdev in scene_device_list:
                         if sdev['sceneNo'] == scene_no and sdev['deviceId'] == did:
                             try:
-                                dev_status = json.loads(sdev['devStatus']) if isinstance(sdev['devStatus'], str) else sdev['devStatus']
-                                val = dev_status.get(skey, "N/A")
-                            except:
-                                pass
-                    self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(val)))
+                                dev_status = json.loads(sdev['devStatus']) if isinstance(sdev['devStatus'], str) else \
+                                sdev['devStatus']
+                                raw_val = dev_status.get(skey, "N/A")
+
+                                # 状态值智能翻译
+                                if isinstance(raw_val, (int, float, str)):
+                                    try:
+                                        num_val = int(raw_val)
+                                        val = "开" if num_val == 1 else "关" if num_val == 0 else str(num_val)
+                                    except ValueError:
+                                        val = "开" if str(raw_val).lower() in ['true', 'on'] else \
+                                            "关" if str(raw_val).lower() in ['false', 'off'] else str(raw_val)
+                                else:
+                                    val = str(raw_val)
+                            except Exception as e:
+                                print(f"状态解析失败: {str(e)}")
+                    self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
 
             self.table.horizontalHeader().setFixedHeight(100)
+            self.table.resizeColumnsToContents()
 
         except Exception as e:
             QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
