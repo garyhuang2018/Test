@@ -187,37 +187,66 @@ def get_template_by_id(token, template_id):
 
 
 class TemplateSelectWindow(QWidget):
-    def __init__(self, token, template_list):
+    def __init__(self, token, hotel_list):
         super().__init__()
         self.token = token
-        self.template_list = template_list
-        self.setWindowTitle("选择模板")
+        self.hotel_list = hotel_list
+
+        self.setWindowTitle("模板选择")
         self.setGeometry(400, 300, 400, 200)
 
+        # 酒店选择
+        self.hotel_combo = QComboBox()
+        self.hotel_map = {hotel["hotelName"]: hotel["hotelCode"] for hotel in hotel_list}
+        self.hotel_combo.addItems(self.hotel_map.keys())
+
+        # 模板选择
         self.template_combo = QComboBox()
-        self.template_map = {t["name"]: t["id"] for t in template_list}
-        self.template_combo.addItems(self.template_map.keys())
+        self.template_combo.setVisible(False)  # 初始隐藏
+
+        # 按钮
+        self.next_button = QPushButton("下一步（加载模板列表）")
+        self.next_button.clicked.connect(self.fetch_templates)
 
         self.confirm_button = QPushButton("确定")
         self.confirm_button.clicked.connect(self.load_template)
+        self.confirm_button.setVisible(False)
 
+        # 布局
         layout = QVBoxLayout()
-
+        layout.addWidget(QLabel("请选择酒店："))
+        layout.addWidget(self.hotel_combo)
+        layout.addWidget(self.next_button)
         layout.addWidget(QLabel("请选择模板："))
         layout.addWidget(self.template_combo)
         layout.addWidget(self.confirm_button)
+
         self.setLayout(layout)
+
+    def fetch_templates(self):
+        selected_hotel_name = self.hotel_combo.currentText()
+        project_id = self.hotel_map[selected_hotel_name]
+
+        try:
+            templates = fetch_templates(self.token, project_id)
+            print(templates)
+            self.template_map = {t["name"]: t["id"] for t in templates}
+            self.template_combo.clear()
+            self.template_combo.addItems(self.template_map.keys())
+            self.template_combo.setVisible(True)
+            self.confirm_button.setVisible(True)
+
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"获取模板列表失败：{str(e)}")
 
     def load_template(self):
         selected_name = self.template_combo.currentText()
         template_id = self.template_map[selected_name]
 
         try:
-
             json_data = get_template_by_id(self.token, template_id)
-
             self.hide()
-            self.main_app = MatrixDeviceRelationApp(json_data, self.token, self.template_list)
+            self.main_app = MatrixDeviceRelationApp(json_data, self.token, self.hotel_list)
             self.main_app.show()
         except Exception as e:
             QMessageBox.critical(self, "错误", f"加载模板失败: {str(e)}")
@@ -573,8 +602,8 @@ class LoginWindow(QWidget):
             hotel_list = get_hotel_list(token)
             if template_list:
                 self.hide()
-                # self.template_selector = TemplateSelectWindow(token, hotel_list)
-                self.template_selector = TemplateSelectWindow(token, template_list)
+                self.template_selector = TemplateSelectWindow(token, hotel_list)
+                # self.template_selector = TemplateSelectWindow(token, template_list)
                 self.template_selector.show()
             else:
                 QMessageBox.warning(self, "警告", "未获取到模板列表")
@@ -584,12 +613,7 @@ class LoginWindow(QWidget):
 
 
 if __name__ == '__main__':
-    # token = login_and_get_token("13823199026", "123456")
-    # template_list = get_template_list(token)
-    # print(template_list)
-    # get_hotel_list(token)
     token = login_and_get_token("13823199026", "123456")
-    fetch_templates(token, "0123")
     app = QApplication(sys.argv)
     login = LoginWindow()
     login.show()
