@@ -4,6 +4,8 @@ import sys
 import json
 import hmac
 import hashlib
+from collections import defaultdict
+
 import requests
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout,
@@ -291,10 +293,143 @@ class MatrixDeviceRelationApp(QMainWindow):
         self.selector = TemplateSelectWindow(self.token, self.template_list)
         self.selector.show()
 
+    # def build_matrix(self):
+    #     try:
+    #
+    #         from api.read_product_type import get_product_name
+    #
+    #         data = json.loads(self.json_data['data'])
+    #         device_list = data.get('deviceList', [])
+    #         scene_list = data.get('sceneList', [])
+    #         scene_device_list = data.get('sceneDeviceList', [])
+    #         mapping_list = data.get('mappingList', [])
+    #
+    #         # 设备ID到每个 keyName 的中文名映射
+    #         device_keyname_map = {}
+    #         for device in device_list:
+    #             did = device.get("deviceId")
+    #             key_map = {}
+    #
+    #             # 1. 先尝试从 uiRemark 中提取 switch_name_*
+    #             ui_remark = device.get("uiRemark")
+    #             if ui_remark:
+    #                 try:
+    #                     remark_dict = json.loads(ui_remark)
+    #                     for key, val in remark_dict.items():
+    #                         match = re.match(r"switch_name_(\d+)", key)
+    #                         if match:
+    #                             switch_idx = match.group(1)
+    #                             key_map[f"switch_{switch_idx}"] = val
+    #                 except Exception as e:
+    #                     print(f"[警告] uiRemark 解析失败 for device {did}: {e}")
+    #
+    #             # 2. 若 keyName 字段也存在，也合并进去（不覆盖 uiRemark 中已有的）
+    #             key_name_dict = device.get("keyName", {})
+    #             if isinstance(key_name_dict, dict):
+    #                 for k, v in key_name_dict.items():
+    #                     key_map.setdefault(k, v)
+    #
+    #             # 保存最终映射
+    #             device_keyname_map[did] = key_map
+    #         # 创建设备ID到产品型号的映射
+    #         device_product_map = {}
+    #         for device in device_list:
+    #             try:
+    #                 factory_code = device.get('factoryCode')
+    #                 factory_type = device.get('factoryType')
+    #                 factory_subtype = device.get('factorySubtype')
+    #                 if factory_code is not None and factory_type is not None:
+    #                     product_model = get_product_name(int(factory_code), int(factory_type), int(factory_subtype))
+    #                     device_product_map[device['deviceId']] = product_model
+    #             except (KeyError, ValueError, TypeError) as e:
+    #                 print(f"获取产品型号失败: {str(e)}")
+    #
+    #         # 原有设备名映射
+    #         dev_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
+    #         switch_keys_map = {}
+    #
+    #         for sdev in scene_device_list:
+    #             did = sdev['deviceId']
+    #             dev_status = sdev.get('devStatus', '{}')
+    #             try:
+    #                 status = json.loads(dev_status) if isinstance(dev_status, str) else dev_status
+    #                 if isinstance(status, dict):
+    #                     switch_keys_map.setdefault(did, set()).update(status.keys())
+    #             except:
+    #                 continue
+    #
+    #         # 列定义：主控设备 + 验收动作 + 所有被控设备状态列
+    #         columns = ["主控设备", "验收动作"]
+    #         slave_columns = []
+    #         for did, keys in switch_keys_map.items():
+    #             for k in sorted(keys):
+    #                 slave_columns.append((did, k))
+    #                 dev_name = insert_linebreaks(dev_name_map.get(did, did))
+    #                 key_cn = device_keyname_map.get(did, {}).get(k, SWITCH_KEY_MAP.get(k, k))
+    #                 columns.append(f"{dev_name}\n{key_cn}")
+    #
+    #         self.table.setColumnCount(len(columns))
+    #         self.table.setHorizontalHeaderLabels(columns)
+    #         self.table.setRowCount(len(mapping_list))
+    #
+    #         for row_idx, mapping in enumerate(mapping_list):
+    #             scene_no = mapping['mappingValueId']
+    #             scene = next((s for s in scene_list if s['sceneNo'] == scene_no), {'sceneName': '未知'})
+    #             master_id = mapping['mappingPrimaryId']
+    #             master_name = dev_name_map.get(master_id, master_id)
+    #
+    #             self.table.setItem(row_idx, 0, QTableWidgetItem(master_name))
+    #
+    #             # 构建“验收动作”列内容（场景名称 + 通道号翻译）
+    #             channel = str(mapping.get('mappingPrimaryChannel', ''))
+    #             product_model = device_product_map.get(master_id, "")
+    #             if product_model == "插卡取电":
+    #                 if channel == "1":
+    #                     channel = "插卡"
+    #                 elif channel == "2":
+    #                     channel = "拔卡"
+    #
+    #             # action_text = f"{scene['sceneName']} - 通道{channel}" if channel else scene['sceneName']
+    #             action_text = f" {channel}" if channel else scene['sceneName']
+    #             self.table.setItem(row_idx, 1, QTableWidgetItem(action_text))
+    #
+    #             # 设备状态翻译逻辑
+    #             for col_idx, (did, skey) in enumerate(slave_columns, start=2):
+    #                 val = "N/A"
+    #                 for sdev in scene_device_list:
+    #                     if sdev['sceneNo'] == scene_no and sdev['deviceId'] == did:
+    #                         try:
+    #                             dev_status = json.loads(sdev['devStatus']) if isinstance(sdev['devStatus'], str) else \
+    #                             sdev['devStatus']
+    #                             raw_val = dev_status.get(skey, "N/A")
+    #
+    #                             # 状态值智能翻译
+    #                             if isinstance(raw_val, (int, float, str)):
+    #                                 try:
+    #                                     num_val = int(raw_val)
+    #                                     val = "开" if num_val == 1 else "关" if num_val == 0 else str(num_val)
+    #                                 except ValueError:
+    #                                     val = "开" if str(raw_val).lower() in ['true', 'on'] else \
+    #                                         "关" if str(raw_val).lower() in ['false', 'off'] else str(raw_val)
+    #                             else:
+    #                                 val = str(raw_val)
+    #                         except Exception as e:
+    #                             print(f"状态解析失败: {str(e)}")
+    #                 self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
+    #
+    #         self.table.horizontalHeader().setFixedHeight(100)
+    #         self.table.resizeColumnsToContents()
+    #
+    #     # except ModuleNotFoundError:
+    #     #     # 打包后的路径（假设 read_product_type.py 在当前目录下）
+    #     #     from read_product_type import get_product_name
+    #     except Exception as e:
+    #         QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
     def build_matrix(self):
         try:
-
             from api.read_product_type import get_product_name
+            import json
+            import re
 
             data = json.loads(self.json_data['data'])
             device_list = data.get('deviceList', [])
@@ -302,96 +437,167 @@ class MatrixDeviceRelationApp(QMainWindow):
             scene_device_list = data.get('sceneDeviceList', [])
             mapping_list = data.get('mappingList', [])
 
-            # 设备ID到每个 keyName 的中文名映射
-            device_keyname_map = {}
-            for device in device_list:
-                did = device.get("deviceId")
-                key_map = {}
+            # ------------------ 基础映射准备 ------------------
+            dev_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
 
-                # 1. 先尝试从 uiRemark 中提取 switch_name_*
-                ui_remark = device.get("uiRemark")
-                if ui_remark:
-                    try:
-                        remark_dict = json.loads(ui_remark)
-                        for key, val in remark_dict.items():
-                            match = re.match(r"switch_name_(\d+)", key)
-                            if match:
-                                switch_idx = match.group(1)
-                                key_map[f"switch_{switch_idx}"] = val
-                    except Exception as e:
-                        print(f"[警告] uiRemark 解析失败 for device {did}: {e}")
-
-                # 2. 若 keyName 字段也存在，也合并进去（不覆盖 uiRemark 中已有的）
-                key_name_dict = device.get("keyName", {})
-                if isinstance(key_name_dict, dict):
-                    for k, v in key_name_dict.items():
-                        key_map.setdefault(k, v)
-
-                # 保存最终映射
-                device_keyname_map[did] = key_map
-            # 创建设备ID到产品型号的映射
+            # 设备 -> 产品型号
             device_product_map = {}
             for device in device_list:
                 try:
                     factory_code = device.get('factoryCode')
                     factory_type = device.get('factoryType')
                     factory_subtype = device.get('factorySubtype')
-                    if factory_code is not None and factory_type is not None:
-                        product_model = get_product_name(int(factory_code), int(factory_type), int(factory_subtype))
+                    if None not in (factory_code, factory_type, factory_subtype):
+                        product_model = get_product_name(
+                            int(factory_code),
+                            int(factory_type),
+                            int(factory_subtype)
+                        )
                         device_product_map[device['deviceId']] = product_model
-                except (KeyError, ValueError, TypeError) as e:
-                    print(f"获取产品型号失败: {str(e)}")
+                except Exception as e:
+                    print(f"获取产品型号失败: {e}")
 
-            # 原有设备名映射
-            dev_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
-            switch_keys_map = {}
+            # 设备 -> 按键名称映射
+            device_keyname_map = {}
+            for device in device_list:
+                did = device.get("deviceId")
+                key_map = {}
+                # 解析 uiRemark 中的 switch_name_x
+                ui_remark = device.get("uiRemark")
+                if ui_remark:
+                    try:
+                        remark_dict = json.loads(ui_remark)
+                        for key, val in remark_dict.items():
+                            match = re.match(r"switch_name_(\d+)", key)  # 先赋值
+                            if match:  # 再判断
+                                switch_idx = match.group(1)
+                                key_map[f"switch_{switch_idx}"] = val
+                    except Exception as e:
+                        print(f"[uiRemark解析失败] {did}: {e}")
+                # 合并 keyName 字段
+                key_name_dict = device.get("keyName", {})
+                if isinstance(key_name_dict, dict):
+                    key_map.update(key_name_dict)
+                device_keyname_map[did] = key_map
 
+            # ------------------ 动态场景映射解析 ------------------
+            # 设备 -> 场景按键映射 (从 config_info 提取)
+            device_scene_mapping = {}
+            for device in device_list:
+                did = device.get("deviceId")
+                ws_dev_data = device.get("wsDevData")
+                if not ws_dev_data:
+                    continue
+                try:
+                    dev_data = json.loads(ws_dev_data)
+                    config_info_str = dev_data.get("config_info", "{}")
+                    config_info = json.loads(config_info_str)
+                    scenes_str = config_info.get("scenes", "")
+                    scenes = list(map(int, scenes_str.split(','))) if scenes_str else []
+                    device_scene_mapping[did] = scenes
+                except Exception as e:
+                    print(f"[config_info解析失败] {did}: {e}")
+
+            # ------------------ 受控设备状态收集 ------------------
+            switch_keys_map = defaultdict(set)
             for sdev in scene_device_list:
                 did = sdev['deviceId']
                 dev_status = sdev.get('devStatus', '{}')
                 try:
                     status = json.loads(dev_status) if isinstance(dev_status, str) else dev_status
                     if isinstance(status, dict):
-                        switch_keys_map.setdefault(did, set()).update(status.keys())
+                        switch_keys_map[did].update(status.keys())
                 except:
                     continue
 
-            # 列定义：主控设备 + 验收动作 + 所有被控设备状态列
+            # ------------------ 本地场景解析（六键面板） ------------------
+            local_scene_rows = []
+            for device in device_list:
+                did = device.get("deviceId")
+                ui_remark = device.get("uiRemark")
+                if not ui_remark:
+                    continue
+
+                scenes = device_scene_mapping.get(did, [])  # 从config_info获取映射
+
+                try:
+                    remark_dict = json.loads(ui_remark)
+                    # 遍历所有 scene_name_x 定义
+                    for key in remark_dict:
+                        match = re.match(r"scene_name_(\d+)", key)
+                        if not match:
+                            continue
+
+                        scene_idx = int(match.group(1))  # 场景名称的序号（从1开始）
+                        # 动态映射到实际场景编号
+                        if scenes and 1 <= scene_idx <= len(scenes):
+                            actual_scene_num = scenes[scene_idx - 1]
+                        else:
+                            actual_scene_num = scene_idx  # 兼容无config_info的情况
+
+                        scene_name = remark_dict.get(key)
+                        scene_status_str = remark_dict.get(f"scene_{actual_scene_num}")
+
+                        if not (scene_name and scene_status_str):
+                            print(f"场景{scene_idx}配置不完整: 设备{did}")
+                            continue
+
+                        try:
+                            scene_status = json.loads(scene_status_str) if isinstance(scene_status_str,
+                                                                                      str) else scene_status_str
+                            if not isinstance(scene_status, dict):
+                                raise ValueError("场景状态非字典格式")
+
+                            local_scene_rows.append({
+                                'masterId': did,
+                                'channel': scene_idx,
+                                'sceneName': scene_name,
+                                'controlledSwitches': scene_status,
+                            })
+                            # 更新受控设备字段
+                            for skey in scene_status.keys():
+                                switch_keys_map[did].add(skey)
+                        except Exception as e:
+                            print(f"场景状态解析失败: 设备{did} scene_{actual_scene_num} - {e}")
+
+                except Exception as e:
+                    print(f"uiRemark解析失败: 设备{did} - {e}")
+
+            # ------------------ 构建表格结构 ------------------
             columns = ["主控设备", "验收动作"]
             slave_columns = []
             for did, keys in switch_keys_map.items():
                 for k in sorted(keys):
                     slave_columns.append((did, k))
-                    dev_name = insert_linebreaks(dev_name_map.get(did, did))
-                    key_cn = device_keyname_map.get(did, {}).get(k, SWITCH_KEY_MAP.get(k, k))
+                    dev_name = dev_name_map.get(did, did)
+                    key_cn = device_keyname_map.get(did, {}).get(k, k)
                     columns.append(f"{dev_name}\n{key_cn}")
 
+            # 初始化表格
+            total_rows = len(mapping_list) + len(local_scene_rows)
             self.table.setColumnCount(len(columns))
+            self.table.setRowCount(total_rows)
             self.table.setHorizontalHeaderLabels(columns)
-            self.table.setRowCount(len(mapping_list))
 
+            # ------------------ 填充远程场景（mappingList） ------------------
             for row_idx, mapping in enumerate(mapping_list):
                 scene_no = mapping['mappingValueId']
                 scene = next((s for s in scene_list if s['sceneNo'] == scene_no), {'sceneName': '未知'})
                 master_id = mapping['mappingPrimaryId']
                 master_name = dev_name_map.get(master_id, master_id)
 
+                # 主控设备列
                 self.table.setItem(row_idx, 0, QTableWidgetItem(master_name))
 
-                # 构建“验收动作”列内容（场景名称 + 通道号翻译）
+                # 验收动作列
                 channel = str(mapping.get('mappingPrimaryChannel', ''))
                 product_model = device_product_map.get(master_id, "")
                 if product_model == "插卡取电":
-                    if channel == "1":
-                        channel = "插卡"
-                    elif channel == "2":
-                        channel = "拔卡"
-
-                # action_text = f"{scene['sceneName']} - 通道{channel}" if channel else scene['sceneName']
-                action_text = f" {channel}" if channel else scene['sceneName']
+                    channel = "插卡" if channel == "1" else "拔卡" if channel == "2" else channel
+                action_text = f"{scene['sceneName']} -> 通道{channel}" if channel else scene['sceneName']
                 self.table.setItem(row_idx, 1, QTableWidgetItem(action_text))
 
-                # 设备状态翻译逻辑
+                # 填充受控设备状态
                 for col_idx, (did, skey) in enumerate(slave_columns, start=2):
                     val = "N/A"
                     for sdev in scene_device_list:
@@ -400,27 +606,32 @@ class MatrixDeviceRelationApp(QMainWindow):
                                 dev_status = json.loads(sdev['devStatus']) if isinstance(sdev['devStatus'], str) else \
                                 sdev['devStatus']
                                 raw_val = dev_status.get(skey, "N/A")
-
-                                # 状态值智能翻译
-                                if isinstance(raw_val, (int, float, str)):
-                                    try:
-                                        num_val = int(raw_val)
-                                        val = "开" if num_val == 1 else "关" if num_val == 0 else str(num_val)
-                                    except ValueError:
-                                        val = "开" if str(raw_val).lower() in ['true', 'on'] else \
-                                            "关" if str(raw_val).lower() in ['false', 'off'] else str(raw_val)
-                                else:
-                                    val = str(raw_val)
-                            except Exception as e:
-                                print(f"状态解析失败: {str(e)}")
+                                val = "开" if int(raw_val) == 1 else "关" if int(raw_val) == 0 else str(raw_val)
+                            except:
+                                pass
                     self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
 
+            # ------------------ 填充本地场景（六键面板） ------------------
+            for i, row in enumerate(local_scene_rows):
+                row_idx = len(mapping_list) + i
+                master_id = row['masterId']
+                scene_name = row['sceneName']
+                master_name = dev_name_map.get(master_id, master_id)
+                self.table.setItem(row_idx, 0, QTableWidgetItem(master_name))
+                self.table.setItem(row_idx, 1, QTableWidgetItem(scene_name))
+
+                for col_idx, (did, skey) in enumerate(slave_columns, start=2):
+                    val = "N/A"
+                    if did == master_id:
+                        raw_val = row['controlledSwitches'].get(skey)
+                        if raw_val is not None:
+                            val = "开" if int(raw_val) == 1 else "关" if int(raw_val) == 0 else str(raw_val)
+                    self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
+
+            # 调整表格样式
             self.table.horizontalHeader().setFixedHeight(100)
             self.table.resizeColumnsToContents()
 
-        # except ModuleNotFoundError:
-        #     # 打包后的路径（假设 read_product_type.py 在当前目录下）
-        #     from read_product_type import get_product_name
         except Exception as e:
             QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
 
