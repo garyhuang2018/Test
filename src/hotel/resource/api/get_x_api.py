@@ -543,8 +543,10 @@ class MatrixDeviceRelationApp(QMainWindow):
                             continue
 
                         try:
-                            scene_status = json.loads(scene_status_str) if isinstance(scene_status_str,
-                                                                                      str) else scene_status_str
+                            # 修改后（过滤 isSelf）
+                            scene_status_raw = json.loads(scene_status_str) if isinstance(scene_status_str,
+                                                                                          str) else scene_status_str
+                            scene_status = {k: v for k, v in scene_status_raw.items() if k != 'isSelf'}  # 关键过滤
                             if not isinstance(scene_status, dict):
                                 raise ValueError("场景状态非字典格式")
 
