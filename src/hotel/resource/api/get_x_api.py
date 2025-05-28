@@ -4,6 +4,7 @@ import sys
 import json
 import hmac
 import hashlib
+import time
 from collections import defaultdict
 
 import requests
@@ -77,6 +78,29 @@ def login_and_get_token(username, password):
         raise Exception(f"登录失败: {response.status_code}, {response.text}")
 
 
+def get_hotel_list(token):
+    API_KEY = "c80571ae360349c5a838a719838781f0"
+    APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee"
+    api_path = "/eng/hotel/list"  # ⚠️ 无查询参数
+    sign = generate_sign(api_path, APP_SECRET)
+
+    headers = {
+        'X-API-KEY': f"key={API_KEY};sign={sign}",
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}'
+    }
+
+    # url = f"https://api.gemvary.cn{api_path}"  # ⚠️ URL 也不能带参数
+    url = "https://api.gemvary.cn/eng/hotel/list?hotelPlatformType=1"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        print(response.json())
+        return response.json()
+    else:
+        raise Exception(f"获取酒店列表失败: {response.status_code}, {response.text}")
+
+
 def get_template(token, template_id):
     API_KEY = "c80571ae360349c5a838a719838781f0"
     APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee"
@@ -96,6 +120,27 @@ def get_template(token, template_id):
         raise Exception(f"获取模板失败: {response.status_code}, {response.text}")
 
 
+def fetch_templates(token, project_id):
+    API_KEY = "c80571ae360349c5a838a719838781f0"
+    APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee".encode('utf-8')
+    message = "GET/pcs/templates/vh-templates".encode('utf-8')
+    hash_object = hmac.new(APP_SECRET, message, hashlib.sha256)
+    hex_dig = hash_object.hexdigest()
+    headers_template = {
+        'X-API-KEY': f"key={API_KEY};sign={hex_dig}",
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}'
+    }
+    url = f"https://api.gemvary.cn/pcs/templates/vh-templates?projectId={project_id}"
+
+    response = requests.get(url, headers=headers_template)
+    if response.status_code == 200:
+        print(response.json())
+        return response.json()
+    else:
+        raise Exception(f"获取模板失败: {response.status_code}, {response.text}")
+
+
 def get_template_list(token):
     API_KEY = "c80571ae360349c5a838a719838781f0"
     APP_SECRET = "AZSZFNB9yVrazGhcOvACbBPR0Juol9ee".encode('utf-8')
@@ -107,7 +152,7 @@ def get_template_list(token):
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {token}'
     }
-    url = "https://api.gemvary.cn/pcs/templates/vh-templates?projectId=10086"
+    url = "https://api.gemvary.cn/pcs/templates/vh-templates?projectId=0123"
 
     response = requests.get(url, headers=headers_template)
     if response.status_code == 200:
@@ -157,6 +202,7 @@ class TemplateSelectWindow(QWidget):
         self.confirm_button.clicked.connect(self.load_template)
 
         layout = QVBoxLayout()
+
         layout.addWidget(QLabel("请选择模板："))
         layout.addWidget(self.template_combo)
         layout.addWidget(self.confirm_button)
@@ -195,26 +241,6 @@ class TemplateSelectWindow(QWidget):
         try:
             # 获取模板内容
             template_data = get_template(self.token, template_id)
-
-            # ✅ 打印原始模板 JSON（格式化）
-            print("获取到的原始模板内容：")
-            print(json.dumps(template_data, indent=2, ensure_ascii=False))
-
-            # ✅ 解析 data 字段中的设备、场景、映射等
-            if 'data' in template_data:
-                parsed_data = json.loads(template_data['data'])
-
-                print("\n--- 设备列表 deviceList ---")
-                print(json.dumps(parsed_data.get('deviceList', []), indent=2, ensure_ascii=False))
-
-                print("\n--- 场景列表 sceneList ---")
-                print(json.dumps(parsed_data.get('sceneList', []), indent=2, ensure_ascii=False))
-
-                print("\n--- 场景设备列表 sceneDeviceList ---")
-                print(json.dumps(parsed_data.get('sceneDeviceList', []), indent=2, ensure_ascii=False))
-
-                print("\n--- 控制关系映射 mappingList ---")
-                print(json.dumps(parsed_data.get('mappingList', []), indent=2, ensure_ascii=False))
 
             # 隐藏模板选择窗口
             self.hide()
@@ -293,138 +319,6 @@ class MatrixDeviceRelationApp(QMainWindow):
         self.selector = TemplateSelectWindow(self.token, self.template_list)
         self.selector.show()
 
-    # def build_matrix(self):
-    #     try:
-    #
-    #         from api.read_product_type import get_product_name
-    #
-    #         data = json.loads(self.json_data['data'])
-    #         device_list = data.get('deviceList', [])
-    #         scene_list = data.get('sceneList', [])
-    #         scene_device_list = data.get('sceneDeviceList', [])
-    #         mapping_list = data.get('mappingList', [])
-    #
-    #         # 设备ID到每个 keyName 的中文名映射
-    #         device_keyname_map = {}
-    #         for device in device_list:
-    #             did = device.get("deviceId")
-    #             key_map = {}
-    #
-    #             # 1. 先尝试从 uiRemark 中提取 switch_name_*
-    #             ui_remark = device.get("uiRemark")
-    #             if ui_remark:
-    #                 try:
-    #                     remark_dict = json.loads(ui_remark)
-    #                     for key, val in remark_dict.items():
-    #                         match = re.match(r"switch_name_(\d+)", key)
-    #                         if match:
-    #                             switch_idx = match.group(1)
-    #                             key_map[f"switch_{switch_idx}"] = val
-    #                 except Exception as e:
-    #                     print(f"[警告] uiRemark 解析失败 for device {did}: {e}")
-    #
-    #             # 2. 若 keyName 字段也存在，也合并进去（不覆盖 uiRemark 中已有的）
-    #             key_name_dict = device.get("keyName", {})
-    #             if isinstance(key_name_dict, dict):
-    #                 for k, v in key_name_dict.items():
-    #                     key_map.setdefault(k, v)
-    #
-    #             # 保存最终映射
-    #             device_keyname_map[did] = key_map
-    #         # 创建设备ID到产品型号的映射
-    #         device_product_map = {}
-    #         for device in device_list:
-    #             try:
-    #                 factory_code = device.get('factoryCode')
-    #                 factory_type = device.get('factoryType')
-    #                 factory_subtype = device.get('factorySubtype')
-    #                 if factory_code is not None and factory_type is not None:
-    #                     product_model = get_product_name(int(factory_code), int(factory_type), int(factory_subtype))
-    #                     device_product_map[device['deviceId']] = product_model
-    #             except (KeyError, ValueError, TypeError) as e:
-    #                 print(f"获取产品型号失败: {str(e)}")
-    #
-    #         # 原有设备名映射
-    #         dev_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
-    #         switch_keys_map = {}
-    #
-    #         for sdev in scene_device_list:
-    #             did = sdev['deviceId']
-    #             dev_status = sdev.get('devStatus', '{}')
-    #             try:
-    #                 status = json.loads(dev_status) if isinstance(dev_status, str) else dev_status
-    #                 if isinstance(status, dict):
-    #                     switch_keys_map.setdefault(did, set()).update(status.keys())
-    #             except:
-    #                 continue
-    #
-    #         # 列定义：主控设备 + 验收动作 + 所有被控设备状态列
-    #         columns = ["主控设备", "验收动作"]
-    #         slave_columns = []
-    #         for did, keys in switch_keys_map.items():
-    #             for k in sorted(keys):
-    #                 slave_columns.append((did, k))
-    #                 dev_name = insert_linebreaks(dev_name_map.get(did, did))
-    #                 key_cn = device_keyname_map.get(did, {}).get(k, SWITCH_KEY_MAP.get(k, k))
-    #                 columns.append(f"{dev_name}\n{key_cn}")
-    #
-    #         self.table.setColumnCount(len(columns))
-    #         self.table.setHorizontalHeaderLabels(columns)
-    #         self.table.setRowCount(len(mapping_list))
-    #
-    #         for row_idx, mapping in enumerate(mapping_list):
-    #             scene_no = mapping['mappingValueId']
-    #             scene = next((s for s in scene_list if s['sceneNo'] == scene_no), {'sceneName': '未知'})
-    #             master_id = mapping['mappingPrimaryId']
-    #             master_name = dev_name_map.get(master_id, master_id)
-    #
-    #             self.table.setItem(row_idx, 0, QTableWidgetItem(master_name))
-    #
-    #             # 构建“验收动作”列内容（场景名称 + 通道号翻译）
-    #             channel = str(mapping.get('mappingPrimaryChannel', ''))
-    #             product_model = device_product_map.get(master_id, "")
-    #             if product_model == "插卡取电":
-    #                 if channel == "1":
-    #                     channel = "插卡"
-    #                 elif channel == "2":
-    #                     channel = "拔卡"
-    #
-    #             # action_text = f"{scene['sceneName']} - 通道{channel}" if channel else scene['sceneName']
-    #             action_text = f" {channel}" if channel else scene['sceneName']
-    #             self.table.setItem(row_idx, 1, QTableWidgetItem(action_text))
-    #
-    #             # 设备状态翻译逻辑
-    #             for col_idx, (did, skey) in enumerate(slave_columns, start=2):
-    #                 val = "N/A"
-    #                 for sdev in scene_device_list:
-    #                     if sdev['sceneNo'] == scene_no and sdev['deviceId'] == did:
-    #                         try:
-    #                             dev_status = json.loads(sdev['devStatus']) if isinstance(sdev['devStatus'], str) else \
-    #                             sdev['devStatus']
-    #                             raw_val = dev_status.get(skey, "N/A")
-    #
-    #                             # 状态值智能翻译
-    #                             if isinstance(raw_val, (int, float, str)):
-    #                                 try:
-    #                                     num_val = int(raw_val)
-    #                                     val = "开" if num_val == 1 else "关" if num_val == 0 else str(num_val)
-    #                                 except ValueError:
-    #                                     val = "开" if str(raw_val).lower() in ['true', 'on'] else \
-    #                                         "关" if str(raw_val).lower() in ['false', 'off'] else str(raw_val)
-    #                             else:
-    #                                 val = str(raw_val)
-    #                         except Exception as e:
-    #                             print(f"状态解析失败: {str(e)}")
-    #                 self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
-    #
-    #         self.table.horizontalHeader().setFixedHeight(100)
-    #         self.table.resizeColumnsToContents()
-    #
-    #     # except ModuleNotFoundError:
-    #     #     # 打包后的路径（假设 read_product_type.py 在当前目录下）
-    #     #     from read_product_type import get_product_name
-    #     except Exception as e:
-    #         QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
     def build_matrix(self):
         try:
             from api.read_product_type import get_product_name
@@ -676,9 +570,10 @@ class LoginWindow(QWidget):
             token = login_and_get_token(username, password)
             save_login_config(username, password)
             template_list = get_template_list(token)
-
+            hotel_list = get_hotel_list(token)
             if template_list:
                 self.hide()
+                # self.template_selector = TemplateSelectWindow(token, hotel_list)
                 self.template_selector = TemplateSelectWindow(token, template_list)
                 self.template_selector.show()
             else:
@@ -689,6 +584,12 @@ class LoginWindow(QWidget):
 
 
 if __name__ == '__main__':
+    # token = login_and_get_token("13823199026", "123456")
+    # template_list = get_template_list(token)
+    # print(template_list)
+    # get_hotel_list(token)
+    token = login_and_get_token("13823199026", "123456")
+    fetch_templates(token, "0123")
     app = QApplication(sys.argv)
     login = LoginWindow()
     login.show()
