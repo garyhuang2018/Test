@@ -249,29 +249,25 @@ class SerialHexTool(QWidget):
             QMessageBox.critical(self, "配置失败", f"设备配置时出错：{e}")
 
     def display_data(self, data):
-        """显示接收到的数据并进行校验"""
+        """显示接收到的数据并进行完整校验"""
         self.append_log(f"接收: {data}")
 
         # 检查是否有发送的命令需要校验
         if self.last_sent_cmd:
-            # 提取发送命令的中间部分（去掉头尾）
-            # 发送命令格式: "55 FA xx yy zz AA"
-            sent_parts = self.last_sent_cmd.split()
-            if len(sent_parts) >= 6:
-                # 获取中间部分 (索引2,3,4)
-                expected_data = ' '.join(sent_parts[2:5])
+            # 比较完整命令是否一致
+            expected_data = self.last_sent_cmd.upper().strip()
+            received_data = data.upper().strip()
 
-                # 比较接收数据与期望数据
-                if data == expected_data:
-                    self.append_log("校验成功！接收数据与发送数据中间部分匹配")
-                    QMessageBox.information(self, "配置成功", "设备配置成功！接收数据与发送数据匹配。")
-                else:
-                    error_msg = f"校验失败！期望: {expected_data}, 实际: {data}"
-                    self.append_log(error_msg)
-                    QMessageBox.critical(self, "配置失败", error_msg)
+            if received_data == expected_data:
+                self.append_log("校验成功！接收数据与发送数据完全一致")
+                QMessageBox.information(self, "配置成功", "设备配置成功！接收数据与发送数据完全一致。")
+            else:
+                error_msg = f"校验失败！期望: {expected_data}, 实际: {received_data}"
+                self.append_log(error_msg)
+                QMessageBox.critical(self, "配置失败", error_msg)
 
-                # 重置最后发送的命令
-                self.last_sent_cmd = ""
+            # 清除上一次命令记录，避免重复校验
+            self.last_sent_cmd = ""
 
     def append_log(self, msg):
         self.text_edit.append(msg)
