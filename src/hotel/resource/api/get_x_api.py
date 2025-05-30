@@ -32,6 +32,74 @@ SWITCH_KEY_MAP = {
 }
 
 
+def append_voice_control_rows(rows, slave_columns, slave_devices, data):
+    """
+    处理语音管家的控制关系，更新到矩阵结构中
+    :param rows: 矩阵行数据列表
+    :param slave_columns: 受控设备列信息列表
+    :param slave_devices: 受控设备字典 {设备ID: 设备名称}
+    :param data: 完整的JSON数据
+    """
+    device_list = data.get('deviceList', [])
+    mapping_list = data.get('mappingList', [])
+
+    # 创建设备ID到名称的映射
+    device_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
+
+    # 收集语音管家的控制映射
+    voice_control_rows = []
+    for mapping in mapping_list:
+        if mapping['mappingType'] != 2:  # 只处理设备控制映射
+            continue
+
+        master_id = mapping['mappingPrimaryId']
+        slave_id = mapping['mappingValueId']
+        master_ch = mapping['mappingPrimaryChannel']
+        slave_ch = mapping['mappingValueChannel']
+
+        # 获取主控设备名称
+        master_name = device_name_map.get(master_id, master_id)
+
+        # 获取受控设备名称
+        slave_name = device_name_map.get(slave_id, slave_id)
+
+        # 确定状态键（开关类设备用switch_通道，窗帘用mode）
+        state_key = f"switch_{slave_ch}"
+        if "窗帘" in slave_name or "开合帘" in slave_name:
+            state_key = "mode"
+
+        # 添加到受控设备字典
+        slave_devices[slave_id] = slave_name
+
+        # 添加到受控列集合
+        if (slave_id, state_key) not in slave_columns:
+            slave_columns.append((slave_id, state_key))
+
+        # 创建控制行
+        action_text = f"通道{master_ch} → {slave_name}:通道{slave_ch}"
+        voice_control_rows.append({
+            'masterId': master_id,
+            'masterName': master_name,
+            'actionText': action_text,
+            'controlledDevice': slave_id,
+            'stateKey': state_key
+        })
+
+    # 将语音控制行添加到主行列表
+    for row in voice_control_rows:
+        rows.append({
+            'type': 'voice_control',
+            'masterId': row['masterId'],
+            'masterName': row['masterName'],
+            'actionText': row['actionText'],
+            'controlledSwitches': {
+                row['controlledDevice']: {row['stateKey']: 1}  # 状态设为1表示触发
+            }
+        })
+
+    return len(voice_control_rows)
+
+
 def save_login_config(username, password):
     config = {
         "username": username,
@@ -350,9 +418,10 @@ class MatrixDeviceRelationApp(QMainWindow):
 
     def build_matrix(self):
         try:
-            from api.read_product_type import get_product_name
+            from read_product_type import get_product_name
             import json
             import re
+            from collections import defaultdict
 
             data = json.loads(self.json_data['data'])
             device_list = data.get('deviceList', [])
@@ -391,8 +460,8 @@ class MatrixDeviceRelationApp(QMainWindow):
                     try:
                         remark_dict = json.loads(ui_remark)
                         for key, val in remark_dict.items():
-                            match = re.match(r"switch_name_(\d+)", key)  # 先赋值
-                            if match:  # 再判断
+                            match = re.match(r"switch_name_(\d+)", key)
+                            if match:
                                 switch_idx = match.group(1)
                                 key_map[f"switch_{switch_idx}"] = val
                     except Exception as e:
@@ -488,76 +557,202 @@ class MatrixDeviceRelationApp(QMainWindow):
                 except Exception as e:
                     print(f"uiRemark解析失败: 设备{did} - {e}")
 
-            # ------------------ 构建表格结构 ------------------
-            columns = ["主控设备", "验收动作"]
-            slave_columns = []
-            for did, keys in switch_keys_map.items():
-                for k in sorted(keys):
-                    slave_columns.append((did, k))
-                    dev_name = dev_name_map.get(did, did)
-                    key_cn = device_keyname_map.get(did, {}).get(k, k)
-                    columns.append(f"{dev_name}\n{key_cn}")
+            # ------------------ 准备所有矩阵行 ------------------
+            all_rows = []  # 统一存储所有类型的行数据
+            slave_columns = []  # 存储所有受控列 [(设备ID, 状态键), ...]
+            slave_devices = {}  # 存储受控设备 {设备ID: 设备名称}
 
-            # 初始化表格
-            total_rows = len(mapping_list) + len(local_scene_rows)
-            self.table.setColumnCount(len(columns))
-            self.table.setRowCount(total_rows)
-            self.table.setHorizontalHeaderLabels(columns)
+            # ------------------ 处理远程场景（mappingList） ------------------
+            for mapping in mapping_list:
+                if mapping['mappingType'] != 3:  # 只处理场景映射
+                    continue
 
-            # ------------------ 填充远程场景（mappingList） ------------------
-            for row_idx, mapping in enumerate(mapping_list):
                 scene_no = mapping['mappingValueId']
                 scene = next((s for s in scene_list if s['sceneNo'] == scene_no), {'sceneName': '未知'})
                 master_id = mapping['mappingPrimaryId']
                 master_name = dev_name_map.get(master_id, master_id)
 
                 # 主控设备列
-                self.table.setItem(row_idx, 0, QTableWidgetItem(master_name))
-
-                # 验收动作列
                 channel = str(mapping.get('mappingPrimaryChannel', ''))
                 product_model = device_product_map.get(master_id, "")
                 if product_model == "插卡取电":
                     channel = "插卡" if channel == "1" else "拔卡" if channel == "2" else channel
                 action_text = f"{scene['sceneName']} -> 通道{channel}" if channel else scene['sceneName']
-                self.table.setItem(row_idx, 1, QTableWidgetItem(action_text))
+
+                # 创建行数据
+                row_data = {
+                    'type': 'remote_scene',
+                    'masterId': master_id,
+                    'masterName': master_name,
+                    'actionText': action_text,
+                    'sceneNo': scene_no,
+                    'controlledSwitches': defaultdict(dict)
+                }
+
+                # 收集该场景下的所有受控设备状态
+                for sdev in scene_device_list:
+                    if sdev['sceneNo'] == scene_no:
+                        did = sdev['deviceId']
+                        dev_status = sdev.get('devStatus', '{}')
+                        try:
+                            status = json.loads(dev_status) if isinstance(dev_status, str) else dev_status
+                            if isinstance(status, dict):
+                                for key, value in status.items():
+                                    # 添加到行数据
+                                    row_data['controlledSwitches'][did][key] = value
+                                    # 更新受控列
+                                    if (did, key) not in slave_columns:
+                                        slave_columns.append((did, key))
+                                    # 更新受控设备字典
+                                    if did not in slave_devices:
+                                        slave_devices[did] = dev_name_map.get(did, did)
+                        except:
+                            continue
+
+                all_rows.append(row_data)
+
+            # ------------------ 处理本地场景（六键面板） ------------------
+            for row in local_scene_rows:
+                master_id = row['masterId']
+                master_name = dev_name_map.get(master_id, master_id)
+
+                # 修复关键问题：确保controlledSwitches是{设备ID: {状态键: 状态值}}的结构
+                # 本地场景只控制主控设备自身，所以使用master_id作为受控设备ID
+                controlled_switches = {master_id: row['controlledSwitches']}
+
+                row_data = {
+                    'type': 'local_scene',
+                    'masterId': master_id,
+                    'masterName': master_name,
+                    'actionText': row['sceneName'],
+                    'controlledSwitches': controlled_switches
+                }
+
+                # 更新受控列和设备字典
+                for did, status_dict in row_data['controlledSwitches'].items():
+                    # 确保status_dict是字典类型
+                    if isinstance(status_dict, dict):
+                        for key in status_dict.keys():
+                            if (did, key) not in slave_columns:
+                                slave_columns.append((did, key))
+                        if did not in slave_devices:
+                            slave_devices[did] = dev_name_map.get(did, did)
+                    else:
+                        print(f"警告: 本地场景行中的状态值不是字典类型: {type(status_dict)}")
+
+                all_rows.append(row_data)
+
+            # ------------------ 处理语音管家控制关系 ------------------
+            device_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
+            voice_control_rows = []
+
+            for mapping in mapping_list:
+                if mapping['mappingType'] != 2:  # 只处理设备控制映射
+                    continue
+
+                master_id = mapping['mappingPrimaryId']
+                slave_id = mapping['mappingValueId']
+                master_ch = mapping['mappingPrimaryChannel']
+                slave_ch = mapping['mappingValueChannel']
+
+                # 获取主控设备名称
+                master_name = device_name_map.get(master_id, master_id)
+
+                # 获取受控设备名称
+                slave_name = device_name_map.get(slave_id, slave_id)
+
+                # 确定状态键（开关类设备用switch_通道，窗帘用mode）
+                state_key = f"switch_{slave_ch}"
+                if "窗帘" in slave_name or "开合帘" in slave_name:
+                    state_key = "mode"
+
+                # 添加到受控设备字典
+                slave_devices[slave_id] = slave_name
+
+                # 添加到受控列集合
+                if (slave_id, state_key) not in slave_columns:
+                    slave_columns.append((slave_id, state_key))
+
+                # 创建控制行
+                action_text = f"通道{master_ch} → {slave_name}:通道{slave_ch}"
+                voice_control_rows.append({
+                    'masterId': master_id,
+                    'masterName': master_name,
+                    'actionText': action_text,
+                    'controlledDevice': slave_id,
+                    'stateKey': state_key
+                })
+
+            # 将语音控制行添加到总行列表
+            for row in voice_control_rows:
+                all_rows.append({
+                    'type': 'voice_control',
+                    'masterId': row['masterId'],
+                    'masterName': row['masterName'],
+                    'actionText': row['actionText'],
+                    'controlledDevice': row['controlledDevice'],
+                    'stateKey': row['stateKey']
+                })
+
+            # ------------------ 构建表格结构 ------------------
+            columns = ["主控设备", "验收动作"]
+
+            # 添加受控设备列
+            for did, skey in slave_columns:
+                dev_name = slave_devices.get(did, did)
+                key_cn = device_keyname_map.get(did, {}).get(skey, skey)
+                columns.append(f"{dev_name}\n{key_cn}")
+
+            # 初始化表格
+            self.table.setColumnCount(len(columns))
+            self.table.setRowCount(len(all_rows))
+            self.table.setHorizontalHeaderLabels(columns)
+
+            # ------------------ 填充表格 ------------------
+            for row_idx, row_data in enumerate(all_rows):
+                # 主控设备列
+                self.table.setItem(row_idx, 0, QTableWidgetItem(row_data['masterName']))
+
+                # 验收动作列
+                self.table.setItem(row_idx, 1, QTableWidgetItem(row_data['actionText']))
 
                 # 填充受控设备状态
                 for col_idx, (did, skey) in enumerate(slave_columns, start=2):
                     val = "N/A"
-                    for sdev in scene_device_list:
-                        if sdev['sceneNo'] == scene_no and sdev['deviceId'] == did:
-                            try:
-                                dev_status = json.loads(sdev['devStatus']) if isinstance(sdev['devStatus'], str) else \
-                                sdev['devStatus']
-                                raw_val = dev_status.get(skey, "N/A")
+
+                    # 根据不同行类型处理状态
+                    if row_data['type'] == 'remote_scene':
+                        # 远程场景的状态
+                        if did in row_data['controlledSwitches']:
+                            status_dict = row_data['controlledSwitches'][did]
+                            if isinstance(status_dict, dict) and skey in status_dict:
+                                raw_val = status_dict[skey]
                                 val = "开" if int(raw_val) == 1 else "关" if int(raw_val) == 0 else str(raw_val)
-                            except:
-                                pass
-                    self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
 
-            # ------------------ 填充本地场景（六键面板） ------------------
-            for i, row in enumerate(local_scene_rows):
-                row_idx = len(mapping_list) + i
-                master_id = row['masterId']
-                scene_name = row['sceneName']
-                master_name = dev_name_map.get(master_id, master_id)
-                self.table.setItem(row_idx, 0, QTableWidgetItem(master_name))
-                self.table.setItem(row_idx, 1, QTableWidgetItem(scene_name))
+                    elif row_data['type'] == 'local_scene':
+                        # 本地场景的状态
+                        if did in row_data['controlledSwitches']:
+                            status_dict = row_data['controlledSwitches'][did]
+                            # 确保status_dict是字典类型
+                            if isinstance(status_dict, dict) and skey in status_dict:
+                                raw_val = status_dict[skey]
+                                val = "开" if int(raw_val) == 1 else "关" if int(raw_val) == 0 else str(raw_val)
 
-                for col_idx, (did, skey) in enumerate(slave_columns, start=2):
-                    val = "N/A"
-                    if did == master_id:
-                        raw_val = row['controlledSwitches'].get(skey)
-                        if raw_val is not None:
-                            val = "开" if int(raw_val) == 1 else "关" if int(raw_val) == 0 else str(raw_val)
+                    elif row_data['type'] == 'voice_control':
+                        # 语音控制的状态
+                        if did == row_data['controlledDevice'] and skey == row_data['stateKey']:
+                            val = "触发"  # 表示控制动作触发
+
                     self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
 
             # 调整表格样式
             self.table.horizontalHeader().setFixedHeight(100)
             self.table.resizeColumnsToContents()
+            self.table.setAlternatingRowColors(True)  # 启用交替行颜色
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
 
 
