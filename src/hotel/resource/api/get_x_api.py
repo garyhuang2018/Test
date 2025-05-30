@@ -617,7 +617,6 @@ class MatrixDeviceRelationApp(QMainWindow):
                 master_name = dev_name_map.get(master_id, master_id)
 
                 # 修复关键问题：确保controlledSwitches是{设备ID: {状态键: 状态值}}的结构
-                # 本地场景只控制主控设备自身，所以使用master_id作为受控设备ID
                 controlled_switches = {master_id: row['controlledSwitches']}
 
                 row_data = {
@@ -693,6 +692,81 @@ class MatrixDeviceRelationApp(QMainWindow):
                     'controlledDevice': row['controlledDevice'],
                     'stateKey': row['stateKey']
                 })
+
+            # ------------------ 新增：处理语音管家的场景映射 ------------------
+            # 从语音管家的wsDevData中提取场景关联
+            voice_assistant_devices = [d for d in device_list if
+                                       d.get('factoryType') == 41 and d.get('factorySubtype') == 4]
+            for device in voice_assistant_devices:
+                try:
+                    ws_dev_data = device.get('wsDevData')
+                    if not ws_dev_data:
+                        continue
+
+                    dev_data = json.loads(ws_dev_data)
+                    related_info = dev_data.get('related_info', {})
+
+                    # 提取场景关联
+                    scene_mappings = {}
+                    for key, value in related_info.items():
+                        # 过滤掉通道后缀的键（如 "80_channel"）
+                        if '_channel' in key:
+                            continue
+
+                        # 检查是否是场景ID（以网关ID开头）
+                        if isinstance(value, str) and value.startswith('0197108BFE35'):
+                            # 在场景列表中查找匹配的场景
+                            scene = next((s for s in scene_list if s['sceneId'] == value), None)
+                            if scene:
+                                scene_mappings[key] = scene
+
+                    # 为每个场景映射创建行
+                    for channel_str, scene in scene_mappings.items():
+                        try:
+                            channel = int(channel_str)
+                        except ValueError:
+                            channel = channel_str
+
+                        master_id = device['deviceId']
+                        master_name = dev_name_map.get(master_id, master_id)
+                        scene_no = scene['sceneNo']
+                        scene_name = scene['sceneName']
+                        action_text = f"{scene_name} -> 通道{channel}"
+
+                        # 创建行数据
+                        row_data = {
+                            'type': 'remote_scene',
+                            'masterId': master_id,
+                            'masterName': master_name,
+                            'actionText': action_text,
+                            'sceneNo': scene_no,
+                            'controlledSwitches': defaultdict(dict)
+                        }
+
+                        # 收集该场景下的所有受控设备状态
+                        for sdev in scene_device_list:
+                            if sdev['sceneNo'] == scene_no:
+                                did = sdev['deviceId']
+                                dev_status = sdev.get('devStatus', '{}')
+                                try:
+                                    status = json.loads(dev_status) if isinstance(dev_status, str) else dev_status
+                                    if isinstance(status, dict):
+                                        for key, value in status.items():
+                                            # 添加到行数据
+                                            row_data['controlledSwitches'][did][key] = value
+                                            # 更新受控列
+                                            if (did, key) not in slave_columns:
+                                                slave_columns.append((did, key))
+                                            # 更新受控设备字典
+                                            if did not in slave_devices:
+                                                slave_devices[did] = dev_name_map.get(did, did)
+                                except:
+                                    continue
+
+                        all_rows.append(row_data)
+                        print(f"添加语音管家场景: {master_name} - {scene_name} (通道{channel})")
+                except Exception as e:
+                    print(f"处理语音管家场景失败: {e}")
 
             # ------------------ 构建表格结构 ------------------
             columns = ["主控设备", "验收动作"]
