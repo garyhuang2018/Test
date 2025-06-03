@@ -7,11 +7,12 @@ import hashlib
 import time
 from collections import defaultdict
 
+import openpyxl
 import requests
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout,
     QWidget, QMessageBox, QLabel, QLineEdit, QScrollArea, QHeaderView, QStyleOptionHeader,
-    QStyle, QTextEdit, QComboBox, QHBoxLayout
+    QStyle, QTextEdit, QComboBox, QHBoxLayout, QFileDialog
 )
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QTextOption, QPainter
@@ -401,6 +402,10 @@ class MatrixDeviceRelationApp(QMainWindow):
         return_button = QPushButton("返回选择模板")
         return_button.clicked.connect(self.go_back_to_template_select)
         top_layout.addWidget(return_button)
+
+        export_button = QPushButton("导出 Excel")
+        export_button.clicked.connect(self.export_to_excel)
+        top_layout.addWidget(export_button)
 
         layout.addLayout(top_layout)
         layout.addWidget(scroll)
@@ -828,6 +833,34 @@ class MatrixDeviceRelationApp(QMainWindow):
             import traceback
             traceback.print_exc()
             QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
+
+
+    def export_to_excel(self):
+        path, _ = QFileDialog.getSaveFileName(self, "保存为 Excel 文件", "", "Excel 文件 (*.xlsx)")
+        if not path:
+            return
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "设备控制矩阵"
+
+            # 写入表头
+            for col in range(self.table.columnCount()):
+                header = self.table.horizontalHeaderItem(col).text()
+                ws.cell(row=1, column=col + 1, value=header)
+
+            # 写入表格内容
+            for row in range(self.table.rowCount()):
+                for col in range(self.table.columnCount()):
+                    item = self.table.item(row, col)
+                    value = item.text() if item else ""
+                    ws.cell(row=row + 2, column=col + 1, value=value)
+
+            wb.save(path)
+            QMessageBox.information(self, "成功", f"文件已成功导出到：\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"导出失败：{str(e)}")
 
 
 class LoginWindow(QWidget):
