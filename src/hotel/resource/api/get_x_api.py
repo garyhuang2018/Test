@@ -577,7 +577,7 @@ class MatrixDeviceRelationApp(QMainWindow):
                 product_model = device_product_map.get(master_id, "")
                 if product_model == "插卡取电":
                     channel = "插卡" if channel == "1" else "拔卡" if channel == "2" else channel
-                action_text = f"{scene['sceneName']} -> 通道{channel}" if channel else scene['sceneName']
+                action_text = f"{channel}" if channel else scene['sceneName']
 
                 # 创建行数据
                 row_data = {
@@ -673,7 +673,7 @@ class MatrixDeviceRelationApp(QMainWindow):
                     slave_columns.append((slave_id, state_key))
 
                 # 创建控制行
-                action_text = f"通道{master_ch} → {slave_name}:通道{slave_ch}"
+                action_text = f"{slave_name}"
                 voice_control_rows.append({
                     'masterId': master_id,
                     'masterName': master_name,
@@ -731,7 +731,7 @@ class MatrixDeviceRelationApp(QMainWindow):
                         master_name = dev_name_map.get(master_id, master_id)
                         scene_no = scene['sceneNo']
                         scene_name = scene['sceneName']
-                        action_text = f"{scene_name} -> 通道{channel}"
+                        action_text = f"{scene_name}"
 
                         # 创建行数据
                         row_data = {
@@ -792,7 +792,7 @@ class MatrixDeviceRelationApp(QMainWindow):
 
                 # 填充受控设备状态
                 for col_idx, (did, skey) in enumerate(slave_columns, start=2):
-                    val = "N/A"
+                    val = ""
 
                     # 根据不同行类型处理状态
                     if row_data['type'] == 'remote_scene':
