@@ -16,6 +16,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QRect, QSize
 from PyQt5.QtGui import QTextOption, QPainter
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from openpyxl.utils import get_column_letter
 import re
 
 CONFIG_FILE = "config.json"
@@ -315,7 +317,8 @@ class TemplateSelectWindow(QWidget):
         try:
             json_data = get_template_by_id(self.token, template_id)
             self.hide()
-            self.main_app = MatrixDeviceRelationApp(json_data, self.token, self.hotel_list)
+            self.main_app = MatrixDeviceRelationApp(json_data, self.token, self.hotel_list, self.hotel_combo.currentText(), selected_name)
+
             self.main_app.show()
         except Exception as e:
             QMessageBox.critical(self, "错误", f"加载模板失败: {str(e)}")
@@ -378,8 +381,10 @@ class WrappingHeader(QHeaderView):
 
 
 class MatrixDeviceRelationApp(QMainWindow):
-    def __init__(self, json_data, token=None, template_list=None):
+    def __init__(self, json_data, token=None, template_list=None, project_name="", template_name=""):
         super().__init__()
+        self.project_name = project_name
+        self.template_name = template_name
         self.token = token
         self.template_list = template_list
         self.json_data = json_data
@@ -834,7 +839,6 @@ class MatrixDeviceRelationApp(QMainWindow):
             traceback.print_exc()
             QMessageBox.critical(self, "错误", f"构建矩阵失败：{str(e)}")
 
-
     def export_to_excel(self):
         path, _ = QFileDialog.getSaveFileName(self, "保存为 Excel 文件", "", "Excel 文件 (*.xlsx)")
         if not path:
@@ -843,22 +847,61 @@ class MatrixDeviceRelationApp(QMainWindow):
         try:
             wb = openpyxl.Workbook()
             ws = wb.active
-            ws.title = "设备控制矩阵"
+            ws.title = self.template_name or "设备控制矩阵"
 
-            # 写入表头
+            # === 标题行 ===
+            title = f"{self.project_name} - {self.template_name}"
+            ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=self.table.columnCount())
+            title_cell = ws.cell(row=1, column=1)
+            title_cell.value = title
+            title_cell.font = Font(size=14, bold=True)
+            title_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # === 表头行（第2行）===
+            header_font = Font(bold=True)
+            header_fill = PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
+            align_wrap_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            thin_border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin')
+            )
+
             for col in range(self.table.columnCount()):
                 header = self.table.horizontalHeaderItem(col).text()
-                ws.cell(row=1, column=col + 1, value=header)
+                cell = ws.cell(row=2, column=col + 1, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = align_wrap_center
+                cell.border = thin_border
 
-            # 写入表格内容
+            # === 数据行 ===
+            thin_border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin')
+            )
+
             for row in range(self.table.rowCount()):
                 for col in range(self.table.columnCount()):
                     item = self.table.item(row, col)
                     value = item.text() if item else ""
-                    ws.cell(row=row + 2, column=col + 1, value=value)
+                    cell = ws.cell(row=row + 3, column=col + 1, value=value)
+                    align_wrap_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                    cell.alignment = align_wrap_center
+                    cell.border = thin_border
 
+            # === 自动调整列宽 ===
+            for col_idx in range(1, self.table.columnCount() + 1):
+                max_length = 0
+                for row_idx in range(1, self.table.rowCount() + 3):  # 包括标题、表头、数据
+                    cell = ws.cell(row=row_idx, column=col_idx)
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                col_letter = get_column_letter(col_idx)
+                ws.column_dimensions[col_letter].width = max_length + 2
+
+            # 保存
             wb.save(path)
-            QMessageBox.information(self, "成功", f"文件已成功导出到：\n{path}")
+            QMessageBox.information(self, "成功", f"文件已成功导出到：\\n{path}")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"导出失败：{str(e)}")
 
