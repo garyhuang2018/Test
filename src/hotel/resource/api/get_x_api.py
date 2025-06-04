@@ -34,6 +34,88 @@ SWITCH_KEY_MAP = {
     "mode": "模式",
 }
 
+def append_controller_relation_rows(all_rows, controller_relations, device_list, slave_columns, slave_devices):
+    device_id_name_map = {dev["deviceId"]: dev.get("deviceName", dev["deviceId"]) for dev in device_list}
+    device_ui_remark_map = {
+        dev["deviceId"]: json.loads(dev["uiRemark"]) if dev.get("uiRemark") else {}
+        for dev in device_list
+    }
+
+    # 构建设备通道中文名映射：{deviceId: {switch_x: 中文名}}
+    device_switch_name_map = defaultdict(dict)
+    for dev in device_list:
+        did = dev["deviceId"]
+        ui_remark = dev.get("uiRemark")
+        if ui_remark:
+            try:
+                remark_dict = json.loads(ui_remark)
+                for key, val in remark_dict.items():
+                    if key.startswith("switch_name_"):
+                        idx = key.split("_")[-1]
+                        if idx.isdigit():
+                            switch_key = f"switch_{idx}"
+                            device_switch_name_map[did][switch_key] = val
+            except:
+                pass
+
+    # 构建设备的“按键编号 ➜ switch_x” 映射
+    device_btn_to_switch_map = {}
+    for dev in device_list:
+        did = dev["deviceId"]
+        btn_map = {}
+        try:
+            ws_data = json.loads(dev.get("wsDevData", "{}"))
+            config_info_str = ws_data.get("config_info", "{}")
+            config_info = json.loads(config_info_str)
+            switch_keys = config_info.get("switchs", "")
+            switch_key_list = [int(k.strip()) for k in switch_keys.split(",") if k.strip().isdigit()]
+            for idx, btn in enumerate(switch_key_list):
+                btn_map[btn] = f"switch_{idx + 1}"
+        except Exception as e:
+            print(f"[解析 config_info.switchs 失败] 设备 {did}: {e}")
+        device_btn_to_switch_map[did] = btn_map
+
+    for rel in controller_relations:
+        master_id = rel["ctlDevId"]
+        master_channel = rel["ctlChannel"]  # 实际是按键编号
+        controlled_id = rel["deviceId"]
+        controlled_channel = rel["devChannel"]  # 实际是按键编号
+
+        master_name = device_id_name_map.get(master_id, master_id)
+        controlled_name = device_id_name_map.get(controlled_id, controlled_id)
+
+        # 主控 switch key
+        master_btn_map = device_btn_to_switch_map.get(master_id, {})
+        master_switch_key = master_btn_map.get(master_channel)
+        master_label = device_switch_name_map.get(master_id, {}).get(master_switch_key, f"K{master_channel}")
+
+        # 受控 switch key
+        controlled_btn_map = device_btn_to_switch_map.get(controlled_id, {})
+        controlled_switch_key = controlled_btn_map.get(controlled_channel)
+        controlled_label = device_switch_name_map.get(controlled_id, {}).get(controlled_switch_key, f"K{controlled_channel}")
+
+        # 更新 slave_devices 和 slave_columns
+        if controlled_id not in slave_devices:
+            slave_devices[controlled_id] = controlled_name
+
+        if controlled_switch_key and (controlled_id, controlled_switch_key) not in slave_columns:
+            slave_columns.append((controlled_id, controlled_switch_key))
+
+        # 构造完整动作文本
+        action_text = f"{master_label}"
+
+        all_rows.append({
+            "type": "controller_relation",
+            "masterId": master_id,
+            "masterName": master_name,
+            "actionText": action_text,
+            "controlledSwitches": {
+                controlled_id: {controlled_switch_key: 1} if controlled_switch_key else {}
+            }
+        })
+
+        print(f"添加控制器关系: {master_name} {master_label} → {controlled_name} {controlled_label}")
+
 
 def append_voice_control_rows(rows, slave_columns, slave_devices, data):
     """
@@ -438,6 +520,7 @@ class MatrixDeviceRelationApp(QMainWindow):
             scene_list = data.get('sceneList', [])
             scene_device_list = data.get('sceneDeviceList', [])
             mapping_list = data.get('mappingList', [])
+            controller_relation_list = data.get("controllerRelationInfoList", [])
 
             # ------------------ 基础映射准备 ------------------
             dev_name_map = {d['deviceId']: d.get('deviceName', d['deviceId']) for d in device_list}
@@ -537,20 +620,20 @@ class MatrixDeviceRelationApp(QMainWindow):
                         else:
                             actual_scene_num = scene_idx  # 兼容无config_info的情况
 
+                        # 场景名：先从当前 key，找不到就从 scene_name_x 再找
                         scene_name = remark_dict.get(key)
+                        if not scene_name:
+                            scene_name = remark_dict.get(f"scene_name_{actual_scene_num}", f"场景 {actual_scene_num}")
+
+                        # 场景状态
                         scene_status_str = remark_dict.get(f"scene_{actual_scene_num}")
-
-                        if not (scene_name and scene_status_str):
-                            print(f"场景{scene_idx}配置不完整: 设备{did}")
-                            continue
-
                         try:
-                            # 修改后（过滤 isSelf）
                             scene_status_raw = json.loads(scene_status_str) if isinstance(scene_status_str,
                                                                                           str) else scene_status_str
-                            scene_status = {k: v for k, v in scene_status_raw.items() if k != 'isSelf'}  # 关键过滤
-                            if not isinstance(scene_status, dict):
+                            if not isinstance(scene_status_raw, dict):
                                 raise ValueError("场景状态非字典格式")
+
+                            scene_status = {k: v for k, v in scene_status_raw.items() if k != 'isSelf'}
 
                             local_scene_rows.append({
                                 'masterId': did,
@@ -558,9 +641,11 @@ class MatrixDeviceRelationApp(QMainWindow):
                                 'sceneName': scene_name,
                                 'controlledSwitches': scene_status,
                             })
-                            # 更新受控设备字段
+
+                            # 收集状态键
                             for skey in scene_status.keys():
                                 switch_keys_map[did].add(skey)
+
                         except Exception as e:
                             print(f"场景状态解析失败: 设备{did} scene_{actual_scene_num} - {e}")
 
@@ -778,6 +863,10 @@ class MatrixDeviceRelationApp(QMainWindow):
                 except Exception as e:
                     print(f"处理语音管家场景失败: {e}")
 
+            # 处理面板关联控制映射 - 修改后的调用方式
+            append_controller_relation_rows(all_rows, controller_relation_list, device_list, slave_columns,
+                                            slave_devices)
+
             # ------------------ 构建表格结构 ------------------
             columns = ["主控设备", "验收动作"]
 
@@ -792,21 +881,43 @@ class MatrixDeviceRelationApp(QMainWindow):
             self.table.setRowCount(len(all_rows))
             self.table.setHorizontalHeaderLabels(columns)
 
-            # ------------------ 填充表格 ------------------
+            # ------------------ 填充表格（含调试打印） ------------------
             for row_idx, row_data in enumerate(all_rows):
+                print(
+                    f"\n[填充第 {row_idx + 1} 行] 类型: {row_data['type']} 主控: {row_data['masterName']} 动作: {row_data['actionText']}")
+
+                if row_data['type'] in ('local_scene', 'remote_scene'):
+                    if isinstance(row_data['actionText'], int) or re.fullmatch(r'\d+', str(row_data['actionText'])):
+                        print(f"⚠️ 发现动作为数字: {row_data['actionText']}，尝试翻译为中文名称...")
+                        did = row_data['masterId']
+                        device = next((d for d in device_list if d['deviceId'] == did), None)
+                        if device:
+                            try:
+                                remark = device.get('uiRemark')
+                                if remark:
+                                    remark_dict = json.loads(remark)
+                                    idx = row_data['actionText']
+                                    scene_name_key = f"scene_name_{idx}"
+                                    if scene_name_key in remark_dict:
+                                        row_data['actionText'] = remark_dict[scene_name_key]
+                                        print(f"✅ 翻译成功：scene_name_{idx} = {row_data['actionText']}")
+                                    else:
+                                        print(f"❌ 无 scene_name_{idx}，保持原值")
+                            except Exception as e:
+                                print(f"❌ 翻译失败: {e}")
+
                 # 主控设备列
                 self.table.setItem(row_idx, 0, QTableWidgetItem(row_data['masterName']))
 
                 # 验收动作列
-                self.table.setItem(row_idx, 1, QTableWidgetItem(row_data['actionText']))
+                print(f"✅ 最终显示验收动作: {row_data['actionText']}")
+                self.table.setItem(row_idx, 1, QTableWidgetItem(str(row_data['actionText'])))
 
                 # 填充受控设备状态
                 for col_idx, (did, skey) in enumerate(slave_columns, start=2):
                     val = ""
 
-                    # 根据不同行类型处理状态
                     if row_data['type'] == 'remote_scene':
-                        # 远程场景的状态
                         if did in row_data['controlledSwitches']:
                             status_dict = row_data['controlledSwitches'][did]
                             if isinstance(status_dict, dict) and skey in status_dict:
@@ -814,18 +925,22 @@ class MatrixDeviceRelationApp(QMainWindow):
                                 val = "开" if int(raw_val) == 1 else "关" if int(raw_val) == 0 else str(raw_val)
 
                     elif row_data['type'] == 'local_scene':
-                        # 本地场景的状态
                         if did in row_data['controlledSwitches']:
                             status_dict = row_data['controlledSwitches'][did]
-                            # 确保status_dict是字典类型
                             if isinstance(status_dict, dict) and skey in status_dict:
                                 raw_val = status_dict[skey]
                                 val = "开" if int(raw_val) == 1 else "关" if int(raw_val) == 0 else str(raw_val)
 
                     elif row_data['type'] == 'voice_control':
-                        # 语音控制的状态
                         if did == row_data['controlledDevice'] and skey == row_data['stateKey']:
-                            val = "触发"  # 表示控制动作触发
+                            val = "触发"
+
+                    elif row_data['type'] == 'controller_relation':
+                        # 对于面板控制关系，检查当前列对应的受控设备ID和状态键是否匹配
+                        if did in row_data['controlledSwitches']:
+                            status_dict = row_data['controlledSwitches'][did]
+                            if isinstance(status_dict, dict) and skey in status_dict:
+                                val = "触发"
 
                     self.table.setItem(row_idx, col_idx, QTableWidgetItem(val))
 
