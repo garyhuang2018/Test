@@ -99,20 +99,20 @@ class SerialHexTool(QWidget):
         self.device_type_group = QButtonGroup(self)
 
         self.junhe_radio = QRadioButton("君合灵柔")
-        self.gp_radio = QRadioButton("GP")
-        self.mc6_radio = QRadioButton("MC6")
+        # self.gp_radio = QRadioButton("GP")
+        # self.mc6_radio = QRadioButton("MC6")
 
         # 添加到按钮组实现互斥
         self.device_type_group.addButton(self.junhe_radio, 1)
-        self.device_type_group.addButton(self.gp_radio, 2)
-        self.device_type_group.addButton(self.mc6_radio, 3)
+        # self.device_type_group.addButton(self.gp_radio, 2)
+        # self.device_type_group.addButton(self.mc6_radio, 3)
 
         # 默认选择君合灵柔
         self.junhe_radio.setChecked(True)
 
         device_type_layout.addWidget(self.junhe_radio)
-        device_type_layout.addWidget(self.gp_radio)
-        device_type_layout.addWidget(self.mc6_radio)
+        # device_type_layout.addWidget(self.gp_radio)
+        # device_type_layout.addWidget(self.mc6_radio)
 
         device_layout.addWidget(QLabel("设备类型："), 0, 0)
         device_layout.addLayout(device_type_layout, 0, 1, 1, 3)
